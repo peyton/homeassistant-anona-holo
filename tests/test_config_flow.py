@@ -1,4 +1,4 @@
-"""Tests for the Anona Security config flow."""
+"""Tests for the Anona Holo config flow."""
 
 # ruff: noqa: S101, S106, SLF001
 
@@ -13,14 +13,14 @@ from uuid import UUID
 import pytest
 from homeassistant.data_entry_flow import AbortFlow
 
-from custom_components.anona_security.api import (
+from custom_components.anona_holo.api import (
     AnonaApiError,
     AnonaAuthError,
     HomeContext,
     LoginContext,
 )
-from custom_components.anona_security.config_flow import AnonaSecurityConfigFlow
-from custom_components.anona_security.const import (
+from custom_components.anona_holo.config_flow import AnonaHoloConfigFlow
+from custom_components.anona_holo.const import (
     CONF_CLIENT_UUID,
     CONF_EMAIL,
     CONF_HOME_ID,
@@ -75,9 +75,9 @@ class _GenericApiErrorApi:
         self.home_id = None
 
 
-def _make_flow() -> AnonaSecurityConfigFlow:
+def _make_flow() -> AnonaHoloConfigFlow:
     """Create a fresh flow instance for a test."""
-    flow = AnonaSecurityConfigFlow()
+    flow = AnonaHoloConfigFlow()
     cast("Any", flow).hass = SimpleNamespace()
     return flow
 
@@ -110,15 +110,15 @@ def test_user_step_creates_entry_with_client_uuid(
     flow_any._abort_if_unique_id_configured = Mock()
     flow_any.async_create_entry = create_entry
     monkeypatch.setattr(
-        "custom_components.anona_security.config_flow.AnonaApi",
+        "custom_components.anona_holo.config_flow.AnonaApi",
         lambda *_args, **_kwargs: api,
     )
     monkeypatch.setattr(
-        "custom_components.anona_security.config_flow.async_get_clientsession",
+        "custom_components.anona_holo.config_flow.async_get_clientsession",
         _return_session,
     )
     monkeypatch.setattr(
-        "custom_components.anona_security.config_flow.uuid4",
+        "custom_components.anona_holo.config_flow.uuid4",
         lambda: UUID("12345678-1234-5678-1234-567812345678"),
     )
 
@@ -136,7 +136,7 @@ def test_user_step_creates_entry_with_client_uuid(
 
     assert unique_ids == ["user@example.com"]
     assert result["type"] == "create_entry"
-    assert result["title"] == "Anona Security (User@Example.com)"
+    assert result["title"] == "Anona Holo (User@Example.com)"
     assert result["data"] == {
         CONF_EMAIL: "User@Example.com",
         CONF_PASSWORD: "secret-password",
@@ -169,11 +169,11 @@ def test_user_step_reports_invalid_auth(monkeypatch: pytest.MonkeyPatch) -> None
     flow_any._abort_if_unique_id_configured = Mock()
     flow_any.async_show_form = show_form
     monkeypatch.setattr(
-        "custom_components.anona_security.config_flow.AnonaApi",
+        "custom_components.anona_holo.config_flow.AnonaApi",
         lambda *_args, **_kwargs: api,
     )
     monkeypatch.setattr(
-        "custom_components.anona_security.config_flow.async_get_clientsession",
+        "custom_components.anona_holo.config_flow.async_get_clientsession",
         _return_session,
     )
 
@@ -215,11 +215,11 @@ def test_user_step_reports_generic_api_error(monkeypatch: pytest.MonkeyPatch) ->
     flow_any._abort_if_unique_id_configured = Mock()
     flow_any.async_show_form = show_form
     monkeypatch.setattr(
-        "custom_components.anona_security.config_flow.AnonaApi",
+        "custom_components.anona_holo.config_flow.AnonaApi",
         lambda *_args, **_kwargs: api,
     )
     monkeypatch.setattr(
-        "custom_components.anona_security.config_flow.async_get_clientsession",
+        "custom_components.anona_holo.config_flow.async_get_clientsession",
         _return_session,
     )
 

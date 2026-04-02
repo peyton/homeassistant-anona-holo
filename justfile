@@ -30,7 +30,7 @@ typecheck:
     XDG_CACHE_HOME="${XDG_CACHE_HOME:-/tmp/xdg-cache}"; \
     UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"; \
     UV_TOOL_DIR="${UV_TOOL_DIR:-/tmp/uv-tools}"; \
-    XDG_CACHE_HOME="${XDG_CACHE_HOME}" UV_CACHE_DIR="${UV_CACHE_DIR}" UV_TOOL_DIR="${UV_TOOL_DIR}" uvx --from "${PYRIGHT_PACKAGE}" pyright --pythonpath ./.venv/bin/python custom_components/anona_security tests scripts
+    XDG_CACHE_HOME="${XDG_CACHE_HOME}" UV_CACHE_DIR="${UV_CACHE_DIR}" UV_TOOL_DIR="${UV_TOOL_DIR}" uvx --from "${PYRIGHT_PACKAGE}" pyright --pythonpath ./.venv/bin/python custom_components/anona_holo tests scripts
 
 test:
     .venv/bin/python -m pytest -q

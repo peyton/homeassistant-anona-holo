@@ -1,6 +1,6 @@
-"""Constants for the Anona Security integration."""
+"""Constants for the Anona Holo integration."""
 
-DOMAIN = "anona_security"
+DOMAIN = "anona_holo"
 
 API_BASE_URL = "https://us-api.anonasecurity.com"
 

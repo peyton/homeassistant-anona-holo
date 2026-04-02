@@ -1,0 +1,13 @@
+{
+  "domain": "anona_holo",
+  "name": "Anona Holo",
+  "codeowners": ["@peyton"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/peyton/homeassistant-anona-holo",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/peyton/homeassistant-anona-holo/issues",
+  "requirements": ["aiohttp>=3.9.0"],
+  "version": "0.3.0"
+}
