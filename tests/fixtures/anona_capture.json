@@ -130,5 +130,70 @@
       "websocketAesKey": "1005206B0BE3E571D03228AB2034AA5A",
       "appToken": null
     }
+  },
+  "websocket_commands": {
+    "handshake": {
+      "token": "ws-session-token",
+      "operate_id": "1775128161513",
+      "ts": 1775128161513,
+      "ack": {
+        "ackCode": 200,
+        "isAck": true,
+        "operateId": "1775128161513",
+        "ts": 1775128161607
+      }
+    },
+    "lock": {
+      "send_id": 7,
+      "operate_id": "1775128212237501",
+      "ts": 1775128212237,
+      "content": "083010079203062A0408ABC620",
+      "ack": {
+        "ackCode": 200,
+        "isAck": true,
+        "operateId": "1775128212237501",
+        "ts": 1775128212343
+      },
+      "result": {
+        "content": "083010079203043A020800",
+        "deviceId": "device-123",
+        "operateId": "1775128212237501",
+        "source": 2,
+        "ts": 1775128214733
+      },
+      "push": {
+        "content": "080110011A040A0208642001280030003A100A0010001A040A02080020002A00320040004800520208025A05080110B4016202080068007204080010017A0208018001008A01020802",
+        "deviceId": "device-123",
+        "operateId": "14d858ec-ce64-44b9-b242-cd29c3f4d8af",
+        "source": 2,
+        "ts": 1775128215789
+      }
+    },
+    "unlock": {
+      "send_id": 6,
+      "operate_id": "1775128251753870",
+      "ts": 1775128251753,
+      "content": "083010069203062A0408ABC620",
+      "ack": {
+        "ackCode": 200,
+        "isAck": true,
+        "operateId": "1775128251753870",
+        "ts": 1775128251865
+      },
+      "result": {
+        "content": "083010069203043A020800",
+        "deviceId": "device-123",
+        "operateId": "1775128251753870",
+        "source": 2,
+        "ts": 1775128253905
+      },
+      "push": {
+        "content": "083010069203043A020800",
+        "deviceId": "device-123",
+        "operateId": "387313cc-a9f5-48e4-ab67-4d1c2ea1fa28",
+        "source": 2,
+        "ts": 1775128255010
+      }
+    }
   }
 }

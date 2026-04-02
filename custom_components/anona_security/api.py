@@ -2,20 +2,29 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
 import hashlib
 import json
 import logging
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
+
+from aiohttp import WSMsgType
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.padding import PKCS7
 
 from .const import (
     API_BASE_URL,
     APP_CHANNEL,
     APP_DEVICE_TYPE,
+    COMMAND_ID_LOCK,
+    COMMAND_ID_UNLOCK,
     DEFAULT_LANG,
+    DEVICE_TYPE_LOCK,
     ENDPOINT_DEVICE_CERTS,
     ENDPOINT_DEVICE_INFO,
     ENDPOINT_DEVICE_LIST,
@@ -27,6 +36,8 @@ from .const import (
     ENDPOINT_WEBSOCKET_ADDRESS,
     PASSWORD_SIGN_SALT,
     STATUS_SMART_TYPE,
+    WEBSOCKET_COMMAND_TARGET,
+    WEBSOCKET_TIMEOUT_SECONDS,
 )
 
 if TYPE_CHECKING:
@@ -36,6 +47,10 @@ _LOGGER = logging.getLogger(__name__)
 HTTP_STATUS_OK = 200
 PROTOBUF_WIRE_VARINT = 0
 PROTOBUF_WIRE_LENGTH_DELIMITED = 2
+PROTOBUF_VARINT_MASK = 0x7F
+AES_BLOCK_SIZE_BITS = 128
+AES_BLOCK_SIZE_BYTES = 16
+WEBSOCKET_AES_KEY_LENGTH = 16
 
 type DecodedProtoValue = int | dict[str, DecodedProtoValue] | list[DecodedProtoValue]
 
@@ -54,6 +69,10 @@ class AnonaSignatureError(AnonaApiError):
 
 class AnonaUnsupportedCommandError(AnonaApiError):
     """Raised when lock control remains blocked by missing protocol evidence."""
+
+
+class AnonaCommandError(AnonaApiError):
+    """Raised when websocket command delivery fails."""
 
 
 @dataclass(slots=True, frozen=True)
@@ -142,6 +161,21 @@ class WebsocketContext:
     address: str
     websocket_token: str | None
     websocket_aes_key: str | None
+    raw: dict[str, Any]
+
+
+@dataclass(slots=True, frozen=True)
+class WebsocketMessage:
+    """Normalized websocket message payload."""
+
+    operate_id: str | None
+    ts: int | None
+    device_id: str | None
+    source: int | None
+    target: int | None
+    content: str | None
+    ack_code: int | None
+    is_ack: bool
     raw: dict[str, Any]
 
 
@@ -453,19 +487,174 @@ class AnonaApi:
         )
 
     async def lock(self, device: DeviceContext | str) -> None:
-        """Block the lock command until websocket frames are captured."""
-        await self.get_device_certs_for_owner(device)
-        await self.get_websocket_address()
-        message = (
-            "Lock and unlock remain blocked until a capture includes "
-            "websocket authSync, "
-            "lockDoor, and unLockDoor frames."
-        )
-        raise AnonaUnsupportedCommandError(message)
+        """Lock a device through the captured websocket command flow."""
+        await self._execute_websocket_command(device, send_id=COMMAND_ID_LOCK)
 
     async def unlock(self, device: DeviceContext | str) -> None:
-        """Block the unlock command until websocket frames are captured."""
-        await self.lock(device)
+        """Unlock a device through the captured websocket command flow."""
+        await self._execute_websocket_command(device, send_id=COMMAND_ID_UNLOCK)
+
+    async def _execute_websocket_command(
+        self,
+        device: DeviceContext | str,
+        *,
+        send_id: int,
+    ) -> None:
+        """Send a websocket device command and wait for its completion callback."""
+        device_context = self._resolve_device_context(device)
+        if device_context.device_type != DEVICE_TYPE_LOCK:
+            message = (
+                "Only captured lock devices are supported for websocket commands; "
+                f"got device type {device_context.device_type}"
+            )
+            raise AnonaUnsupportedCommandError(message)
+
+        if self._user_id is None:
+            message = "No user_id available; login first"
+            raise AnonaAuthError(message)
+
+        await self.get_device_certs_for_owner(device_context)
+        websocket_context = await self.get_websocket_address()
+        handshake_token = _require_string(
+            websocket_context.websocket_token,
+            "websocket token",
+        )
+        websocket_aes_key = _require_string(
+            websocket_context.websocket_aes_key,
+            "websocket aes key",
+        )
+
+        async with self._session.ws_connect(websocket_context.address) as websocket:
+            await self._send_websocket_handshake(websocket, handshake_token)
+            operation = build_websocket_operation()
+            command_content = build_command_content(send_id, self._user_id)
+            encrypted_payload = encrypt_websocket_payload(
+                build_websocket_command_payload(
+                    device=device_context,
+                    content=command_content,
+                    operate_id=operation["operateId"],
+                    ts=_require_int(operation["ts"], "websocket command ts"),
+                    target=WEBSOCKET_COMMAND_TARGET,
+                ),
+                websocket_aes_key,
+            )
+            await websocket.send_str(encrypted_payload)
+            _LOGGER.debug(
+                "Sent websocket command %s for %s with operateId=%s",
+                send_id,
+                device_context.device_id,
+                operation["operateId"],
+            )
+            await self._await_websocket_command_result(
+                websocket,
+                websocket_aes_key=websocket_aes_key,
+                operate_id=_require_string(
+                    operation["operateId"], "websocket command operateId"
+                ),
+                device_id=device_context.device_id,
+            )
+
+    async def _send_websocket_handshake(
+        self,
+        websocket: aiohttp.ClientWebSocketResponse,
+        handshake_token: str,
+    ) -> None:
+        """Send the plaintext websocket handshake and require an ack."""
+        operation = build_websocket_handshake_payload(handshake_token)
+        await websocket.send_str(serialize_websocket_payload(operation))
+        handshake_ack = await self._receive_websocket_message(
+            websocket,
+            websocket_aes_key=None,
+            timeout_seconds=WEBSOCKET_TIMEOUT_SECONDS,
+        )
+        operate_id = _require_string(operation["operateId"], "handshake operateId")
+        if (
+            not handshake_ack.is_ack
+            or handshake_ack.ack_code != HTTP_STATUS_OK
+            or handshake_ack.operate_id != operate_id
+        ):
+            message = (
+                "Websocket handshake failed with payload "
+                f"{handshake_ack.raw!r}"
+            )
+            raise AnonaCommandError(message)
+
+    async def _await_websocket_command_result(
+        self,
+        websocket: aiohttp.ClientWebSocketResponse,
+        *,
+        websocket_aes_key: str,
+        operate_id: str,
+        device_id: str,
+    ) -> WebsocketMessage:
+        """Wait for the ack and completion callback for a websocket device command."""
+        ack_received = False
+        while True:
+            message = await self._receive_websocket_message(
+                websocket,
+                websocket_aes_key=websocket_aes_key,
+                timeout_seconds=WEBSOCKET_TIMEOUT_SECONDS,
+            )
+            if message.is_ack:
+                if message.operate_id == operate_id:
+                    if message.ack_code != HTTP_STATUS_OK:
+                        error_message = (
+                            "Websocket command ack failed with payload "
+                            f"{message.raw!r}"
+                        )
+                        raise AnonaCommandError(error_message)
+                    ack_received = True
+                continue
+            if message.operate_id != operate_id:
+                _LOGGER.debug(
+                    "Ignoring websocket push for %s while waiting on %s: %s",
+                    message.device_id,
+                    operate_id,
+                    message.raw,
+                )
+                continue
+            if message.device_id not in {None, device_id}:
+                error_message = (
+                    "Websocket command returned a mismatched deviceId: "
+                    f"{message.raw!r}"
+                )
+                raise AnonaCommandError(error_message)
+            if not ack_received:
+                _LOGGER.debug(
+                    "Received websocket command result before explicit ack for %s",
+                    operate_id,
+                )
+            return message
+
+    async def _receive_websocket_message(
+        self,
+        websocket: aiohttp.ClientWebSocketResponse,
+        *,
+        websocket_aes_key: str | None,
+        timeout_seconds: int,
+    ) -> WebsocketMessage:
+        """Receive and decode the next websocket text frame."""
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                frame = await websocket.receive()
+        except TimeoutError as err:
+            message = "Timed out waiting for websocket message"
+            raise AnonaCommandError(message) from err
+
+        if frame.type is WSMsgType.TEXT:
+            return decode_websocket_message(
+                _require_string(frame.data, "websocket text frame"),
+                websocket_aes_key=websocket_aes_key,
+            )
+        if frame.type in {WSMsgType.CLOSE, WSMsgType.CLOSED, WSMsgType.CLOSING}:
+            message = "Websocket closed before the command completed"
+            raise AnonaCommandError(message)
+        if frame.type is WSMsgType.ERROR:
+            error = websocket.exception()
+            message = f"Websocket error while waiting for command result: {error}"
+            raise AnonaCommandError(message)
+        message = f"Unexpected websocket frame type: {frame.type!s}"
+        raise AnonaCommandError(message)
 
     async def _post_signed(
         self,
@@ -595,6 +784,151 @@ def build_authenticated_signature(
     """Return the shared authenticated-request signature."""
     need_sign = f"{token}{client_uuid}{channel}"
     return _md5_hex(f"{need_sign}{ts}{PASSWORD_SIGN_SALT}")
+
+
+def build_command_content(send_id: int, user_id: str | int) -> str:
+    """Build the captured protobuf payload for a lock or unlock command."""
+    if send_id not in {COMMAND_ID_UNLOCK, COMMAND_ID_LOCK}:
+        message = f"Unsupported websocket sendID {send_id}"
+        raise AnonaApiError(message)
+    user_id_int = _coerce_int(user_id)
+    if user_id_int is None:
+        message = "Expected websocket user_id to be an integer-compatible value"
+        raise AnonaApiError(message)
+    payload = b"".join(
+        (
+            _encode_protobuf_varint_field(1, STATUS_SMART_TYPE),
+            _encode_protobuf_varint_field(2, send_id),
+            _encode_protobuf_length_delimited_field(
+                50,
+                _encode_protobuf_length_delimited_field(
+                    5,
+                    _encode_protobuf_varint_field(1, user_id_int),
+                ),
+            ),
+        )
+    )
+    return payload.hex().upper()
+
+
+def build_websocket_handshake_payload(handshake_token: str) -> dict[str, Any]:
+    """Build the plaintext websocket handshake payload."""
+    timestamp_ms = time.time_ns() // 1_000_000
+    return {
+        "operateId": str(timestamp_ms),
+        "ts": timestamp_ms,
+        "handshakeToken": handshake_token,
+    }
+
+
+def build_websocket_operation() -> dict[str, Any]:
+    """Build the timestamp fields used by a websocket command."""
+    timestamp_ns = time.time_ns()
+    return {
+        "operateId": str(timestamp_ns // 1_000),
+        "ts": timestamp_ns // 1_000_000,
+    }
+
+
+def build_websocket_command_payload(
+    *,
+    device: DeviceContext,
+    content: str,
+    operate_id: str,
+    ts: int,
+    target: int,
+) -> dict[str, Any]:
+    """Build the JSON payload that is AES-encrypted for device commands."""
+    return {
+        "content": content,
+        "deviceId": device.device_id,
+        "deviceType": device.device_type,
+        "operateId": operate_id,
+        "target": target,
+        "ts": ts,
+    }
+
+
+def serialize_websocket_payload(payload: Mapping[str, Any]) -> str:
+    """Serialize a websocket payload with the app's compact JSON style."""
+    return json.dumps(payload, separators=(",", ":"))
+
+
+def encrypt_websocket_payload(
+    payload: Mapping[str, Any],
+    websocket_aes_key: str,
+) -> str:
+    """AES-CBC encrypt a websocket payload and encode it as uppercase hex."""
+    key = _decode_websocket_aes_key(websocket_aes_key)
+    padder = PKCS7(AES_BLOCK_SIZE_BITS).padder()
+    plaintext = serialize_websocket_payload(payload).encode()
+    padded = padder.update(plaintext) + padder.finalize()
+    encryptor = Cipher(algorithms.AES(key), modes.CBC(_websocket_aes_iv())).encryptor()
+    ciphertext = encryptor.update(padded) + encryptor.finalize()
+    return ciphertext.hex().upper()
+
+
+def decrypt_websocket_payload(
+    ciphertext_hex: str,
+    websocket_aes_key: str,
+) -> dict[str, Any]:
+    """AES-CBC decrypt a websocket payload encoded as hexadecimal text."""
+    key = _decode_websocket_aes_key(websocket_aes_key)
+    try:
+        ciphertext = bytes.fromhex(ciphertext_hex)
+    except ValueError as err:
+        message = "Websocket payload was not valid hexadecimal"
+        raise AnonaApiError(message) from err
+    if len(ciphertext) % AES_BLOCK_SIZE_BYTES != 0:
+        message = "Encrypted websocket payload length was invalid"
+        raise AnonaApiError(message)
+    decryptor = Cipher(algorithms.AES(key), modes.CBC(_websocket_aes_iv())).decryptor()
+    padded = decryptor.update(ciphertext) + decryptor.finalize()
+    unpadder = PKCS7(AES_BLOCK_SIZE_BITS).unpadder()
+    plaintext = unpadder.update(padded) + unpadder.finalize()
+    try:
+        payload = json.loads(plaintext.decode())
+    except (UnicodeDecodeError, json.JSONDecodeError) as err:
+        message = "Decrypted websocket payload was not valid JSON"
+        raise AnonaApiError(message) from err
+    return _require_mapping(payload, "websocket payload")
+
+
+def decode_websocket_message(
+    payload_text: str,
+    *,
+    websocket_aes_key: str | None,
+) -> WebsocketMessage:
+    """Decode a websocket text frame into the normalized message model."""
+    stripped = payload_text.strip()
+    if stripped.startswith("{"):
+        try:
+            direct_payload = json.loads(stripped)
+        except json.JSONDecodeError as err:
+            message = "Websocket payload was not valid JSON"
+            raise AnonaApiError(message) from err
+        payload = _require_mapping(direct_payload, "websocket payload")
+    else:
+        if websocket_aes_key is None:
+            message = "Encrypted websocket payload received before an AES key was set"
+            raise AnonaApiError(message)
+        payload = decrypt_websocket_payload(stripped, websocket_aes_key)
+    return normalize_websocket_message(payload)
+
+
+def normalize_websocket_message(payload: Mapping[str, Any]) -> WebsocketMessage:
+    """Normalize a websocket JSON payload into the typed message model."""
+    return WebsocketMessage(
+        operate_id=_coerce_string(payload.get("operateId")),
+        ts=_coerce_int(payload.get("ts")),
+        device_id=_coerce_string(payload.get("deviceId")),
+        source=_coerce_int(payload.get("source")),
+        target=_coerce_int(payload.get("target")),
+        content=_coerce_string(payload.get("content")),
+        ack_code=_coerce_int(payload.get("ackCode")),
+        is_ack=bool(payload.get("isAck")),
+        raw=dict(payload),
+    )
 
 
 def decode_response_envelope(text: str) -> dict[str, Any]:
@@ -763,6 +1097,29 @@ def _decode_protobuf_message(raw_bytes: bytes) -> dict[str, DecodedProtoValue]:
     return fields
 
 
+def _encode_protobuf_varint(value: int) -> bytes:
+    """Encode an integer using protobuf varint encoding."""
+    encoded = bytearray()
+    remaining = value
+    while remaining > PROTOBUF_VARINT_MASK:
+        encoded.append((remaining & PROTOBUF_VARINT_MASK) | 0x80)
+        remaining >>= 7
+    encoded.append(remaining)
+    return bytes(encoded)
+
+
+def _encode_protobuf_varint_field(field_number: int, value: int) -> bytes:
+    """Encode a protobuf varint field."""
+    key = (field_number << 3) | PROTOBUF_WIRE_VARINT
+    return _encode_protobuf_varint(key) + _encode_protobuf_varint(value)
+
+
+def _encode_protobuf_length_delimited_field(field_number: int, chunk: bytes) -> bytes:
+    """Encode a protobuf length-delimited field."""
+    key = (field_number << 3) | PROTOBUF_WIRE_LENGTH_DELIMITED
+    return _encode_protobuf_varint(key) + _encode_protobuf_varint(len(chunk)) + chunk
+
+
 def _read_varint(raw_bytes: bytes, offset: int) -> tuple[int, int]:
     """Read a protobuf varint from a byte buffer."""
     value = 0
@@ -875,3 +1232,21 @@ def _coerce_string(value: Any) -> str | None:
     if isinstance(value, int):
         return str(value)
     return None
+
+
+def _decode_websocket_aes_key(websocket_aes_key: str) -> bytes:
+    """Decode and validate the websocket AES session key."""
+    try:
+        key = bytes.fromhex(websocket_aes_key)
+    except ValueError as err:
+        message = "Websocket AES key was not valid hexadecimal"
+        raise AnonaApiError(message) from err
+    if len(key) != WEBSOCKET_AES_KEY_LENGTH:
+        message = "Websocket AES key must decode to 16 bytes"
+        raise AnonaApiError(message)
+    return key
+
+
+def _websocket_aes_iv() -> bytes:
+    """Return the fixed IV used by the captured websocket protocol."""
+    return bytes(range(16))

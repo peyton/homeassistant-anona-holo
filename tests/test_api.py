@@ -10,21 +10,33 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Self, cast
+from unittest.mock import patch
+
+from aiohttp import WSMessage, WSMsgType
 
 from custom_components.anona_security.api import (
     AnonaApi,
+    WebsocketMessage,
     build_authenticated_signature,
+    build_command_content,
     build_login_signature,
+    build_websocket_command_payload,
     decode_response_envelope,
+    decode_websocket_message,
+    encrypt_websocket_payload,
     hash_password,
     normalize_device_context,
     parse_lock_status,
+    serialize_websocket_payload,
 )
 from custom_components.anona_security.const import (
     APP_CHANNEL,
     APP_DEVICE_TYPE,
+    COMMAND_ID_LOCK,
+    COMMAND_ID_UNLOCK,
     DEFAULT_LANG,
     STATUS_SMART_TYPE,
+    WEBSOCKET_COMMAND_TARGET,
 )
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "anona_capture.json"
@@ -59,15 +71,61 @@ class _FakeResponse:
 class _FakeSession:
     """Minimal session object that records POST calls."""
 
-    def __init__(self, responses: list[_FakeResponse]) -> None:
+    def __init__(
+        self,
+        responses: list[_FakeResponse],
+        *,
+        websockets: list[_FakeWebsocket] | None = None,
+    ) -> None:
         """Initialize the fake session with a response queue."""
         self._responses = responses
+        self._websockets = websockets or []
         self.requests: list[dict[str, Any]] = []
+        self.websocket_requests: list[dict[str, Any]] = []
 
     def post(self, url: str, **kwargs: Any) -> _FakeResponse:
         """Record the request and return the next canned response."""
         self.requests.append({"url": url, **kwargs})
         return self._responses.pop(0)
+
+    def ws_connect(self, url: str, **kwargs: Any) -> _FakeWebsocket:
+        """Record a websocket connection and return the next canned socket."""
+        self.websocket_requests.append({"url": url, **kwargs})
+        return self._websockets.pop(0)
+
+
+class _FakeWebsocket:
+    """Minimal websocket object that records sent frames and replays responses."""
+
+    def __init__(self, messages: list[WSMessage]) -> None:
+        """Initialize the fake websocket with a message queue."""
+        self._messages = messages
+        self.sent: list[str] = []
+
+    async def __aenter__(self) -> Self:
+        """Enter the async context manager."""
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: object,
+    ) -> bool:
+        """Exit the async context manager."""
+        return False
+
+    async def send_str(self, data: str) -> None:
+        """Record an outbound websocket text frame."""
+        self.sent.append(data)
+
+    async def receive(self) -> WSMessage:
+        """Return the next canned websocket message."""
+        return self._messages.pop(0)
+
+    def exception(self) -> None:
+        """Match aiohttp's websocket error access API."""
+        return
 
 
 def _encode_success(result_body_object: Any) -> str:
@@ -88,9 +146,10 @@ def _make_api(
     *,
     authed: bool = False,
     home_id: str | None = None,
+    websockets: list[_FakeWebsocket] | None = None,
 ) -> tuple[AnonaApi, _FakeSession]:
     """Build an API client backed by the fake session."""
-    session = _FakeSession(responses)
+    session = _FakeSession(responses, websockets=websockets)
     api = AnonaApi(
         cast("Any", session),
         client_uuid=FIXTURE["signature_fixture"]["client_uuid"],
@@ -321,3 +380,187 @@ def test_get_device_certs_and_websocket_context_normalize_payloads() -> None:
         == FIXTURE["websocket"]["response_object"]["websocketAddress"]
     )
     assert websocket_context.websocket_token == "ws-session-token"
+
+
+def test_build_command_content_matches_the_captured_lock_and_unlock_payloads() -> None:
+    """The protobuf command builder should reproduce the captured content hex."""
+    assert (
+        build_command_content(
+            COMMAND_ID_LOCK,
+            FIXTURE["login"]["response_object"]["userID"],
+        )
+        == FIXTURE["websocket_commands"]["lock"]["content"]
+    )
+    assert (
+        build_command_content(
+            COMMAND_ID_UNLOCK,
+            FIXTURE["login"]["response_object"]["userID"],
+        )
+        == FIXTURE["websocket_commands"]["unlock"]["content"]
+    )
+
+
+def test_decode_websocket_message_handles_plain_and_encrypted_frames() -> None:
+    """Websocket decoding should support plaintext handshake acks and AES frames."""
+    handshake_ack = json.dumps(FIXTURE["websocket_commands"]["handshake"]["ack"])
+    encrypted_result = encrypt_websocket_payload(
+        FIXTURE["websocket_commands"]["lock"]["result"],
+        FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+    )
+
+    decoded_handshake = decode_websocket_message(
+        handshake_ack,
+        websocket_aes_key=None,
+    )
+    decoded_result = decode_websocket_message(
+        encrypted_result,
+        websocket_aes_key=FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+    )
+
+    assert decoded_handshake == WebsocketMessage(
+        operate_id="1775128161513",
+        ts=1775128161607,
+        device_id=None,
+        source=None,
+        target=None,
+        content=None,
+        ack_code=200,
+        is_ack=True,
+        raw=FIXTURE["websocket_commands"]["handshake"]["ack"],
+    )
+    assert decoded_result.operate_id == "1775128212237501"
+    assert decoded_result.device_id == "device-123"
+    assert decoded_result.content == "083010079203043A020800"
+    assert decoded_result.is_ack is False
+
+
+def test_lock_uses_the_captured_websocket_command_flow() -> None:
+    """Lock should perform the plaintext handshake and encrypted command exchange."""
+    websocket = _FakeWebsocket(
+        [
+            WSMessage(
+                WSMsgType.TEXT,
+                json.dumps(FIXTURE["websocket_commands"]["handshake"]["ack"]),
+                None,
+            ),
+            WSMessage(
+                WSMsgType.TEXT,
+                encrypt_websocket_payload(
+                    FIXTURE["websocket_commands"]["lock"]["ack"],
+                    FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+                ),
+                None,
+            ),
+            WSMessage(
+                WSMsgType.TEXT,
+                encrypt_websocket_payload(
+                    FIXTURE["websocket_commands"]["lock"]["result"],
+                    FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+                ),
+                None,
+            ),
+        ]
+    )
+    api, session = _make_api(
+        [
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(FIXTURE["device_certs"]["response_object"])),
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(FIXTURE["websocket"]["response_object"])),
+        ],
+        authed=True,
+        websockets=[websocket],
+    )
+    device = normalize_device_context(FIXTURE["device_list"]["response_object"][0])
+
+    with patch(
+        "custom_components.anona_security.api.time.time_ns",
+        side_effect=[
+            1775128161513000000,
+            1775128212237501000,
+        ],
+    ):
+        asyncio.run(api.lock(device))
+
+    assert session.websocket_requests == [
+        {
+            "url": FIXTURE["websocket"]["response_object"]["websocketAddress"],
+        }
+    ]
+    assert websocket.sent[0] == serialize_websocket_payload(
+        {
+            "operateId": FIXTURE["websocket_commands"]["handshake"]["operate_id"],
+            "ts": FIXTURE["websocket_commands"]["handshake"]["ts"],
+            "handshakeToken": FIXTURE["websocket_commands"]["handshake"]["token"],
+        }
+    )
+    assert websocket.sent[1] == encrypt_websocket_payload(
+        build_websocket_command_payload(
+            device=device,
+            content=FIXTURE["websocket_commands"]["lock"]["content"],
+            operate_id=FIXTURE["websocket_commands"]["lock"]["operate_id"],
+            ts=FIXTURE["websocket_commands"]["lock"]["ts"],
+            target=WEBSOCKET_COMMAND_TARGET,
+        ),
+        FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+    )
+
+
+def test_unlock_uses_the_captured_websocket_command_flow() -> None:
+    """Unlock should send the unlock payload and accept the success callback."""
+    websocket = _FakeWebsocket(
+        [
+            WSMessage(
+                WSMsgType.TEXT,
+                json.dumps(FIXTURE["websocket_commands"]["handshake"]["ack"]),
+                None,
+            ),
+            WSMessage(
+                WSMsgType.TEXT,
+                encrypt_websocket_payload(
+                    FIXTURE["websocket_commands"]["unlock"]["ack"],
+                    FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+                ),
+                None,
+            ),
+            WSMessage(
+                WSMsgType.TEXT,
+                encrypt_websocket_payload(
+                    FIXTURE["websocket_commands"]["unlock"]["result"],
+                    FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+                ),
+                None,
+            ),
+        ]
+    )
+    api, _ = _make_api(
+        [
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(FIXTURE["device_certs"]["response_object"])),
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(FIXTURE["websocket"]["response_object"])),
+        ],
+        authed=True,
+        websockets=[websocket],
+    )
+    device = normalize_device_context(FIXTURE["device_list"]["response_object"][0])
+
+    with patch(
+        "custom_components.anona_security.api.time.time_ns",
+        side_effect=[
+            1775128161513000000,
+            1775128251753870000,
+        ],
+    ):
+        asyncio.run(api.unlock(device))
+
+    assert websocket.sent[1] == encrypt_websocket_payload(
+        build_websocket_command_payload(
+            device=device,
+            content=FIXTURE["websocket_commands"]["unlock"]["content"],
+            operate_id=FIXTURE["websocket_commands"]["unlock"]["operate_id"],
+            ts=FIXTURE["websocket_commands"]["unlock"]["ts"],
+            target=WEBSOCKET_COMMAND_TARGET,
+        ),
+        FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+    )
