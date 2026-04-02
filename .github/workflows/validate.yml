@@ -24,9 +24,14 @@ jobs:
   hassfest: # https://developers.home-assistant.io/blog/2020/04/16/hassfest
     name: Hassfest validation
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: Checkout the repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Run hassfest validation
         uses: home-assistant/actions/hassfest@d56d093b9ab8d2105bc0cb6ee9bcc0ef4ec8b96d # master
@@ -34,11 +39,24 @@ jobs:
   hacs: # https://github.com/hacs/action
     name: HACS validation
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: Checkout the repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Skip HACS validation while the repository is private
+        if: ${{ github.event.repository.private == true }}
+        run: echo "Skipping HACS validation because hacs/action fetches raw GitHub URLs that are only accessible after the repository is public."
 
       - name: Run HACS validation
-        uses: hacs/action@main
+        if: ${{ github.event.repository.private != true }}
+        uses: hacs/action@dcb30e72781db3f207d5236b861172774ab0b485 # main
         with:
           category: integration
+          comment: false
+        env:
+          REPOSITORY_REF: ${{ github.head_ref || github.ref_name }}

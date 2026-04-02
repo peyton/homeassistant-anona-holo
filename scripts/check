@@ -2,7 +2,10 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+if ! command -v mise >/dev/null 2>&1; then
+    echo "mise is required. Install mise and run 'mise bootstrap'." >&2
+    exit 1
+fi
 
-scripts/lint
-scripts/test
+cd "$(dirname "$0")/.."
+exec mise run check

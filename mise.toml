@@ -1,0 +1,54 @@
+[tools]
+python = "3.14.3"
+uv = "0.11.3"
+just = "1.48.1"
+hk = "1.40.0"
+pkl = "0.31.1"
+ruff = "0.15.7"
+act = "0.2.87"
+actionlint = "1.7.12"
+ghalint = "1.5.5"
+gh = "2.89.0"
+
+[settings]
+experimental = true
+
+[env]
+HK_MISE = "1"
+
+[hooks]
+postinstall = "hk install --mise"
+
+[tasks.bootstrap]
+description = "Install pinned tools, create the virtualenv, install Python dependencies, and install hooks."
+run = "just bootstrap"
+
+[tasks.lint]
+description = "Run hk-backed repo lint checks."
+depends = ["bootstrap"]
+run = "just lint"
+
+[tasks.fix]
+description = "Run hk-backed repo autofixes."
+depends = ["bootstrap"]
+run = "just fix"
+
+[tasks.typecheck]
+description = "Run pyright via uvx against the repo virtualenv."
+depends = ["bootstrap"]
+run = "just typecheck"
+
+[tasks.test]
+description = "Run pytest."
+depends = ["bootstrap"]
+run = "just test"
+
+[tasks.check]
+description = "Run lint, type-checking, and tests."
+depends = ["bootstrap"]
+run = "just check"
+
+[tasks.develop]
+description = "Start Home Assistant with the local custom component."
+depends = ["bootstrap"]
+run = "just develop"

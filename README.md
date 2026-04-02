@@ -44,10 +44,13 @@ Live command validation:
 From a clean checkout:
 
 ```bash
-scripts/setup
-scripts/lint
-scripts/test
+mise bootstrap
+just lint
+just typecheck
+just test
 ```
+
+`mise bootstrap` installs the pinned CLI tools, creates `.venv`, installs the Python dependencies, and refreshes the `hk` git hooks. The `justfile` is the canonical manual command surface after bootstrap.
 
 ## Repository Notes
 

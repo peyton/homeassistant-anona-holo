@@ -2,22 +2,10 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
-
-if [[ ! -x "${PWD}/.venv/bin/hass" ]]; then
-    echo "Missing virtual environment. Run scripts/setup first." >&2
+if ! command -v mise >/dev/null 2>&1; then
+    echo "mise is required. Install mise and run 'mise bootstrap'." >&2
     exit 1
 fi
 
-# Create config dir if not present
-if [[ ! -d "${PWD}/config" ]]; then
-    mkdir -p "${PWD}/config"
-    .venv/bin/hass --config "${PWD}/config" --script ensure_config
-fi
-
-# Set the path to custom_components
-# This allows Home Assistant to import the local custom component from the repo root.
-export PYTHONPATH="${PYTHONPATH}:${PWD}/custom_components"
-
-# Start Home Assistant
-exec .venv/bin/hass --config "${PWD}/config" --debug
+cd "$(dirname "$0")/.."
+exec mise run develop

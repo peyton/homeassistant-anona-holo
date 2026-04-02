@@ -16,25 +16,34 @@ jobs:
   release:
     name: Create GitHub release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
     steps:
       - name: Checkout the repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v7
         with:
-          enable-cache: true
+          persist-credentials: false
 
-      - name: Set up Python
-        run: uv python install 3.14
+      - name: Set up mise
+        uses: jdx/mise-action@9dc7d5dd454262207dea3ab5a06a3df6afc8ff26 # v3.4.1
+        with:
+          version: 2026.4.1
+          install: true
+          cache: true
 
-      - name: Install project dependencies
-        run: scripts/setup
+      - name: Bootstrap the repository
+        run: mise bootstrap
 
       - name: Run release checks
-        run: scripts/check
+        run: just check
+
+      - name: Skip GitHub release creation under act
+        if: ${{ env.ACT }}
+        run: echo "Skipping GitHub release creation while running under act."
 
       - name: Create GitHub release
+        if: ${{ !env.ACT }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "${GITHUB_REF_NAME}" --generate-notes --verify-tag

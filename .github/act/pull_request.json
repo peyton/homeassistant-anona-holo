@@ -1,0 +1,17 @@
+{
+  "pull_request": {
+    "head": {
+      "ref": "master",
+      "repo": {
+        "full_name": "peyton/homeassistant-anona-security"
+      }
+    },
+    "base": {
+      "ref": "master"
+    }
+  },
+  "repository": {
+    "full_name": "peyton/homeassistant-anona-security",
+    "private": true
+  }
+}
