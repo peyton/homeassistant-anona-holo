@@ -9,10 +9,8 @@ This integration currently supports:
 - lock and unlock commands
 - lock state
 - online and availability state
-- battery level
-- current lock diagnostics exposed through entity attributes
 
-This integration does not support the Anona Holo Keypad. Raw keypad-related diagnostic fields may still appear in lock attributes because the upstream lock status payload includes them, but no keypad entity or keypad controls are provided.
+**This integration does not support the Anona Holo Keypad.** Raw keypad-related diagnostic fields may still appear in lock attributes because the upstream lock status payload includes them, but no keypad entity or keypad controls are provided.
 
 ## HACS
 
@@ -30,7 +28,7 @@ Minimum tested Home Assistant version: `2026.3.4`
 
 ## Status
 
-This repository now matches the Anona mobile app API shape that was captured and verified live:
+This integration matches the Anona mobile app API shape that was captured and verified live using Anona Security v1.5.0 for iOS:
 
 - base64 response envelopes with `resultBodyObject`, `error`, and `errorCode`
 - server-time bootstrap via `/baseServiceApi/V2/getTs`
@@ -47,11 +45,6 @@ The repository also includes the reconstructed websocket command helpers from th
 - websocket command JSON using the mobile-client `deviceType = 73` and `target = 2`
 - protobuf command packing for `sendID = 7` (`lockDoor`) and `sendID = 6` (`unLockDoor`)
 - same-`operateId` ack/result parsing through Home Assistant lock service calls
-
-Live command validation:
-
-1. On April 2, 2026, repo-local live validation against production successfully issued a real `unlock` followed by a real `lock`, ending `Front Door Lock` back in the locked state.
-2. On April 2, 2026, a local Home Assistant `2026.3.4` container loaded the mounted integration and completed a real `lock.unlock` then `lock.lock` round trip for `Front Door Lock`.
 
 ## Development
 
