@@ -1,4 +1,4 @@
-# Prepare `anona_security` For HACS Release
+# Prepare `anona_holo` For HACS Release
 
 This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept current while the release-readiness work proceeds.
 
@@ -11,7 +11,7 @@ The goal of this pass is to make the repository release-ready for HACS distribut
 - [x] (2026-04-02 18:55Z) Audited the current repo surface, issue templates, scripts, workflows, manifest metadata, and ignored files against the current Home Assistant integration file-structure docs and HACS docs.
 - [x] (2026-04-02 19:02Z) Confirmed the release-facing gaps: stale template links, no local brand assets, workflow triggers targeting `main` while the repo default branch is `master`, no tag-driven GitHub release workflow, and repo-local scripts that were still template-grade.
 - [x] (2026-04-02 19:10Z) Updated the manifest, HACS metadata, README, CONTRIBUTING guide, issue templates, and repo-local scripts for a HACS-facing release surface.
-- [x] (2026-04-02 19:13Z) Added local brand assets under `custom_components/anona_security/brand/` from the installed Anona app icon and removed the HACS workflow `ignore: brands` shortcut.
+- [x] (2026-04-02 19:13Z) Added local brand assets under `custom_components/anona_holo/brand/` from the installed Anona app icon and removed the HACS workflow `ignore: brands` shortcut.
 - [x] (2026-04-02 19:17Z) Added a tag-driven GitHub release workflow, fixed the CI and validation workflows to follow both `master` and `main`, and switched the workflows to the repo-local scripts.
 - [x] (2026-04-02 19:20Z) Cleaned scratch directories and transient local work files from the repository root, keeping only ignored Home Assistant runtime state under `config/`.
 - [x] (2026-04-02 19:24Z) Rebuilt the local environment against `homeassistant==2026.3.4`, reran lint, type-checking, tests, YAML workflow parsing, and a final git-state sanity pass.
@@ -27,8 +27,8 @@ The goal of this pass is to make the repository release-ready for HACS distribut
 - Observation: The local Anona macOS bundle already contains usable app icon assets, so the repo did not need synthetic release branding.
   Evidence: `/Applications/Anona Security.app/Wrapper/Anona.app/Annoa76x76@2x~ipad.png` exists and was copied into the integration `brand/` directory for HACS and Home Assistant branding.
 
-- Observation: The repository is still private even though the release surface is now HACS-ready.
-  Evidence: `gh repo view --json visibility` returned `"visibility":"PRIVATE"` after the metadata pass.
+- Observation: The repository is now public, so the real HACS validator can run against raw GitHub URLs instead of taking the private-repo skip path.
+  Evidence: `gh repo view --json isPrivate` returned `{"isPrivate":false}` during the release pass, and the local `act` fixtures were updated to `private: false` for public-repo validation.
 
 ## Decision Log
 
@@ -44,4 +44,4 @@ The goal of this pass is to make the repository release-ready for HACS distribut
 
 This pass was aimed at release discipline, not protocol changes. The repo now has HACS-facing metadata, local brand assets, updated issue templates, repo-local setup/lint/test scripts, CI and validation workflows that match the actual default branch, and a tag-driven GitHub release workflow. Final verification passed after upgrading the local toolchain pin to `homeassistant==2026.3.4`.
 
-The remaining non-code steps are external to the repository contents: the repository must be made public and a real release tag such as `v0.3.0` must be pushed before HACS can consume it as a public release artifact.
+The remaining non-code steps are external to the repository contents: the public repository needs a fresh GitHub `Validate` run with real HACS execution, and then a real release tag such as `v0.0.1` must be pushed before HACS can consume it as a public release artifact.

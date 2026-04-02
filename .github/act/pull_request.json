@@ -3,7 +3,7 @@
     "head": {
       "ref": "master",
       "repo": {
-        "full_name": "peyton/homeassistant-anona-security"
+        "full_name": "peyton/homeassistant-anona-holo"
       }
     },
     "base": {
@@ -11,7 +11,7 @@
     }
   },
   "repository": {
-    "full_name": "peyton/homeassistant-anona-security",
-    "private": true
+    "full_name": "peyton/homeassistant-anona-holo",
+    "private": false
   }
 }
