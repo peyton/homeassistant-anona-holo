@@ -22,6 +22,8 @@ There is one material blocker to a fully working live integration: the app does 
 - [x] (2026-04-02 00:06Z) Replaced the stale tests with sanitized fixture-backed `anona_security` coverage for login, homes, devices, online state, websocket bootstrap, cert parsing, config flow wiring, and lock entity behavior.
 - [x] (2026-04-02 00:09Z) Updated the root README and manifest to describe the real integration, the current signer/websocket prerequisites, and the repo-local validation commands.
 - [x] (2026-04-02 00:20Z) Ran `ruff`, `pytest`, and `pyright` successfully from the repo toolchain; all checks passed after fixing the final typing and entity metadata issues.
+- [x] (2026-04-02 07:58Z) Tightened the `dataHexStr` mapping with conservative battery, door-state, and long-endurance diagnostics derived from the app’s native lock-status vocabulary, then re-ran `ruff`, `pytest`, and `pyright`.
+- [x] (2026-04-02 07:58Z) Narrowed the unresolved H5 signer ownership to `PubBaseWebController` plus the native `PubH5Request` and `PubH5ProxyResponse` models compiled alongside `PubDataNetwork+H5.swift`.
 
 ## Surprises & Discoveries
 
@@ -39,6 +41,12 @@ There is one material blocker to a fully working live integration: the app does 
 
 - Observation: The HAR does not include websocket frames, so live lock and unlock traffic still cannot be reproduced safely.
   Evidence: the HAR entries include HTTP requests for `getDeviceCertsForOwner` and `getWebsocketAddress`, but there are no captured websocket frame payloads to reconstruct `authSync`, `lockDoor`, or `unLockDoor`.
+
+- Observation: The H5 signer surface is owned by `PubBaseWebController`, while the proxy request and response models are native Swift types in the same module.
+  Evidence: `xcrun otool -ov .../Anona | sed -n '142244,142430p;178247,178340p;183322,183350p'` shows `_TtC11PublicUIKit20PubBaseWebController` with ivars `deviceType`, `deviceModule`, `channel`, `deviceId`, `messageHandlers`, and `jsBridge`, plus `_TtC11PublicUIKit12PubH5Request.data` and `_TtC11PublicUIKit18PubH5ProxyResponse.{error,errorCode,resultBodyObject}`. `strings -a .../Anona | rg 'requestSign|performHttpRequest|checkRegisterHandler|PubBaseWebController.swift|PubDataNetwork\\+H5.swift'` places those bridge commands and both source paths in the same binary.
+
+- Observation: The lock-status payload supports more diagnostics than the original HA entity exposed, but only some field mappings are proven by the current fixture.
+  Evidence: the binary contains lock-status names such as `door_state`, `battery_voltage`, `keypad_connection_status`, and long-endurance mode fields; the captured `dataHexStr` decodes into stable numeric fields where `11.1`, `11.2`, `2`, and `12.1` can be surfaced conservatively as charge status, battery voltage, door state, and long-endurance status.
 
 ## Decision Log
 
@@ -62,7 +70,7 @@ There is one material blocker to a fully working live integration: the app does 
 
 This plan started as a full API migration and remains that in structure, but the implementation is now intentionally split into “captured and proven” versus “still blocked.” The captured parts are the request and response envelope, the device and home models, the lock status transport, the password hashing rule, and the Home Assistant entity wiring. The blocked parts are live signature generation and websocket command frames.
 
-The repository is now in that better state: it models the observed API, documents the remaining unknowns, and narrows the unresolved pieces to the signer producer and websocket command frames. The final remaining work after this plan is to capture and reverse the signer producer path and then to capture websocket auth plus one lock and one unlock exchange.
+The repository is now in that better state: it models the observed API, documents the remaining unknowns, and narrows the unresolved pieces to the signer producer and websocket command frames. The HA entity now exposes a slightly richer, still conservative diagnostic surface from `dataHexStr` without overclaiming protobuf semantics. The final remaining work after this plan is to capture and reverse the signer producer path and then to capture websocket auth plus one lock and one unlock exchange.
 
 ## Context and Orientation
 

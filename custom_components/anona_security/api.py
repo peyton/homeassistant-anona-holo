@@ -108,10 +108,13 @@ class LockStatus:
     lock_status_code: int | None
     battery_capacity: int | None
     battery_voltage: int | None
+    charge_status_code: int | None
+    door_state_code: int | None
     door_status_code: int | None
     has_locking_fail: bool | None
     has_door_been_open_long_time: bool | None
     calibration_status_code: int | None
+    long_endurance_mode_status_code: int | None
     keypad_connection_status_code: int | None
     keypad_battery_capacity: int | None
     keypad_status_code: int | None
@@ -637,11 +640,14 @@ def parse_lock_status(
     raw_fields = _decode_protobuf_message(raw_bytes)
     lock_status_code = _nested_int(raw_fields, "1")
     battery_capacity = _nested_int(raw_fields, "3", "1", "1")
+    charge_status_code = _nested_int(raw_fields, "11", "1")
     battery_voltage = _nested_int(raw_fields, "11", "2")
+    door_state_code = _nested_int(raw_fields, "2")
     door_status_code = _nested_int(raw_fields, "4")
     has_locking_fail = _optional_bool(_nested_int(raw_fields, "5"))
     has_door_been_open_long_time = _optional_bool(_nested_int(raw_fields, "6"))
     calibration_status_code = _nested_int(raw_fields, "10", "1")
+    long_endurance_mode_status_code = _nested_int(raw_fields, "12", "1")
     keypad_connection_status_code = _nested_int(raw_fields, "15", "1")
     keypad_battery_capacity = _nested_int(raw_fields, "14", "2")
     keypad_status_code = _nested_int(raw_fields, "17", "1")
@@ -657,10 +663,13 @@ def parse_lock_status(
         lock_status_code=lock_status_code,
         battery_capacity=battery_capacity,
         battery_voltage=battery_voltage,
+        charge_status_code=charge_status_code,
+        door_state_code=door_state_code,
         door_status_code=door_status_code,
         has_locking_fail=has_locking_fail,
         has_door_been_open_long_time=has_door_been_open_long_time,
         calibration_status_code=calibration_status_code,
+        long_endurance_mode_status_code=long_endurance_mode_status_code,
         keypad_connection_status_code=keypad_connection_status_code,
         keypad_battery_capacity=keypad_battery_capacity,
         keypad_status_code=keypad_status_code,

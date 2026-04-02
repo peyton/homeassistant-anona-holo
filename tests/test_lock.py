@@ -49,10 +49,13 @@ LOCK_STATUS = LockStatus(
     lock_status_code=1,
     battery_capacity=100,
     battery_voltage=180,
+    charge_status_code=1,
+    door_state_code=1,
     door_status_code=1,
     has_locking_fail=False,
     has_door_been_open_long_time=False,
     calibration_status_code=2,
+    long_endurance_mode_status_code=0,
     keypad_connection_status_code=1,
     keypad_battery_capacity=1,
     keypad_status_code=2,
@@ -81,7 +84,11 @@ def test_lock_entity_maps_status_objects_and_dispatches_commands() -> None:
     assert entity.is_locked is True
     assert entity.available is True
     assert attrs["battery_level"] == 100
+    assert attrs["lock_battery_capacity"] == 100
     assert attrs["battery_voltage"] == 180
+    assert attrs["charge_status_code"] == 1
+    assert attrs["door_state_code"] == 1
+    assert attrs["long_endurance_mode_status_code"] == 0
     assert attrs["raw_data_hex_str"] == "deadbeef"
     assert attrs["device_id"] == "device-123"
     api.get_device_online_status.assert_awaited_once_with(LOCK_DEVICE)

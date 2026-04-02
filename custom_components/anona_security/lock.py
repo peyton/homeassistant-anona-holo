@@ -118,12 +118,17 @@ class AnonaSecurityLock(LockEntity):
             attrs["raw_data_hex_str"] = lock_status.data_hex_str
             attrs["raw_status_fields"] = lock_status.raw_fields
             attrs["lock_status_code"] = lock_status.lock_status_code
+            attrs["door_state_code"] = lock_status.door_state_code
             attrs["door_status_code"] = lock_status.door_status_code
             attrs["has_locking_fail"] = lock_status.has_locking_fail
             attrs["has_door_been_open_long_time"] = (
                 lock_status.has_door_been_open_long_time
             )
             attrs["calibration_status_code"] = lock_status.calibration_status_code
+            attrs["charge_status_code"] = lock_status.charge_status_code
+            attrs["long_endurance_mode_status_code"] = (
+                lock_status.long_endurance_mode_status_code
+            )
             attrs["keypad_connection_status_code"] = (
                 lock_status.keypad_connection_status_code
             )
@@ -133,6 +138,7 @@ class AnonaSecurityLock(LockEntity):
             attrs["start_type"] = lock_status.start_type
             if lock_status.battery_capacity is not None:
                 attrs["battery_level"] = lock_status.battery_capacity
+                attrs["lock_battery_capacity"] = lock_status.battery_capacity
             if lock_status.battery_voltage is not None:
                 attrs["battery_voltage"] = lock_status.battery_voltage
         return attrs

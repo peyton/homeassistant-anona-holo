@@ -273,9 +273,13 @@ def test_parse_lock_status_decodes_the_captured_hex_payload() -> None:
     assert status.locked is True
     assert status.lock_status_code == 1
     assert status.battery_capacity == 100
+    assert status.charge_status_code == 1
     assert status.battery_voltage == 180
+    assert status.door_state_code == 1
     assert status.door_status_code == 1
+    assert status.long_endurance_mode_status_code == 0
     assert status.raw_fields["3"] == {"1": {"1": 100}}
+    assert status.raw_fields["11"] == {"1": 1, "2": 180}
 
 
 def test_get_device_status_uses_explicit_device_context() -> None:
