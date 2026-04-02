@@ -9,9 +9,9 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 
-from custom_components.integration_blueprint.api import AnonaApiError
-from custom_components.integration_blueprint.const import DEVICE_TYPE_LOCK, DOMAIN
-from custom_components.integration_blueprint.lock import (
+from custom_components.anona_security.api import AnonaApiError
+from custom_components.anona_security.const import DEVICE_TYPE_LOCK, DOMAIN
+from custom_components.anona_security.lock import (
     IntegrationBlueprintLock,
     async_setup_entry,
 )
