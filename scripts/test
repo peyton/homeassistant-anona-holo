@@ -2,13 +2,11 @@
 
 set -euo pipefail
 
+if ! command -v mise >/dev/null 2>&1; then
+    echo "mise is required. Install mise and run 'mise bootstrap'." >&2
+    exit 1
+fi
+
 cd "$(dirname "$0")/.."
-
-PYRIGHT_PACKAGE="${PYRIGHT_PACKAGE:-pyright==1.1.408}"
-
-XDG_CACHE_HOME="${XDG_CACHE_HOME:-/tmp/xdg-cache}" \
-UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}" \
-UV_TOOL_DIR="${UV_TOOL_DIR:-/tmp/uv-tools}" \
-uvx --from "${PYRIGHT_PACKAGE}" pyright --pythonpath ./.venv/bin/python custom_components/anona_security tests
-
-.venv/bin/python -m pytest -q
+mise run typecheck
+exec mise run test

@@ -1,0 +1,36 @@
+amends "package://github.com/jdx/hk/releases/download/v1.40.0/hk@1.40.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.40.0/hk@1.40.0#/Builtins.pkl"
+
+local linters = new Mapping<String, Step> {
+    ["ruff-format"] = Builtins.ruff_format
+    ["ruff"] = Builtins.ruff
+    ["actionlint"] = Builtins.actionlint
+    ["ghalint-workflow"] = Builtins.ghalint_workflow
+}
+
+local pushChecks = new Mapping<String, Step> {
+    ["typecheck"] {
+        check = "just typecheck"
+    }
+    ["test"] {
+        check = "just test"
+    }
+}
+
+hooks {
+    ["pre-commit"] {
+        fix = true
+        stash = "git"
+        steps = linters
+    }
+    ["pre-push"] {
+        steps = pushChecks
+    }
+    ["fix"] {
+        fix = true
+        steps = linters
+    }
+    ["check"] {
+        steps = linters
+    }
+}

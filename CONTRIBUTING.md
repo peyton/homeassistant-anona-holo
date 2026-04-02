@@ -7,9 +7,10 @@
 3. Run the repo-local checks from a clean checkout:
 
 ```bash
-scripts/setup
-scripts/lint
-scripts/test
+mise bootstrap
+just lint
+just typecheck
+just test
 ```
 
 4. Open a pull request with a clear description of the user-visible change.
@@ -27,7 +28,7 @@ Use [GitHub issues](../../issues/new/choose) and include:
 ## Style
 
 - Python changes should follow PEP 8 and keep type hints intact.
-- Prefer the existing repo-local scripts over ad hoc commands.
+- Prefer `mise bootstrap` for setup and the `justfile` for repo commands. The legacy `scripts/*` entry points remain as thin compatibility wrappers.
 - Avoid unrelated cleanup in the same pull request.
 
 ## License

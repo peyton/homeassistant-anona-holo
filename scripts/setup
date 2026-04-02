@@ -2,7 +2,10 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+if ! command -v mise >/dev/null 2>&1; then
+    echo "mise is required. Install mise and run 'mise bootstrap'." >&2
+    exit 1
+fi
 
-uv venv --allow-existing .venv
-uv pip install --python .venv/bin/python -r requirements.txt
+cd "$(dirname "$0")/.."
+exec mise bootstrap

@@ -1,7 +1,7 @@
 {
   "name": "peyton/homeassistant-anona-security",
   "image": "mcr.microsoft.com/devcontainers/base:debian",
-  "postCreateCommand": "scripts/setup",
+  "postCreateCommand": "mise bootstrap",
   "forwardPorts": [8123],
   "portsAttributes": {
     "8123": {
@@ -35,8 +35,7 @@
   },
   "remoteUser": "vscode",
   "features": {
-    "ghcr.io/devcontainers/features/python:1": {
-      "version": "3.14",
+    "ghcr.io/roul/devcontainer-features/mise:1": {
     },
     "ghcr.io/devcontainers-extra/features/apt-packages:1": {
       "packages": "ffmpeg,libturbojpeg0,libpcap-dev",
