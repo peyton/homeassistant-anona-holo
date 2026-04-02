@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-ruff format .
-ruff check . --fix
+.venv/bin/ruff format custom_components tests --check
+.venv/bin/ruff check custom_components tests

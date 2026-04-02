@@ -1,61 +1,35 @@
-# Contribution guidelines
+# Contributing
 
-Contributing to this project should be as easy and transparent as possible, whether it's:
+## Workflow
 
-- Reporting a bug
-- Discussing the current state of the code
-- Submitting a fix
-- Proposing new features
+1. Fork the repository and create a branch from `master`.
+2. Keep changes focused and update documentation when behavior or setup changes.
+3. Run the repo-local checks from a clean checkout:
 
-## Github is used for everything
+```bash
+scripts/setup
+scripts/lint
+scripts/test
+```
 
-Github is used to host code, to track issues and feature requests, as well as accept pull requests.
+4. Open a pull request with a clear description of the user-visible change.
 
-Pull requests are the best way to propose changes to the codebase.
+## Reporting bugs
 
-1. Fork the repo and create your branch from `main`.
-2. If you've changed something, update the documentation.
-3. Make sure your code lints (using `scripts/lint`).
-4. Test you contribution.
-5. Issue that pull request!
+Use [GitHub issues](../../issues/new/choose) and include:
 
-## Any contributions you make will be under the MIT Software License
+- the Home Assistant version
+- the integration version
+- exact reproduction steps
+- debug logs from startup through the failure
+- any relevant screenshots or service-call payloads
 
-In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
+## Style
 
-## Report bugs using Github's [issues](../../issues)
-
-GitHub issues are used to track public bugs.
-Report a bug by [opening a new issue](../../issues/new/choose); it's that easy!
-
-## Write bug reports with detail, background, and sample code
-
-**Great Bug Reports** tend to have:
-
-- A quick summary and/or background
-- Steps to reproduce
-  - Be specific!
-  - Give sample code if you can.
-- What you expected would happen
-- What actually happens
-- Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
-
-People *love* thorough bug reports. I'm not even kidding.
-
-## Use a Consistent Coding Style
-
-Use [black](https://github.com/ambv/black) to make sure the code follows the style.
-
-## Test your code modification
-
-This custom component is based on [integration_blueprint template](https://github.com/ludeeus/integration_blueprint).
-
-It comes with development environment in a container, easy to launch
-if you use Visual Studio Code. With this container you will have a stand alone
-Home Assistant instance running and already configured with the included
-[`configuration.yaml`](./config/configuration.yaml)
-file.
+- Python changes should follow PEP 8 and keep type hints intact.
+- Prefer the existing repo-local scripts over ad hoc commands.
+- Avoid unrelated cleanup in the same pull request.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under its MIT License.
+By contributing, you agree that your contributions will be licensed under the [MIT License](./LICENSE).

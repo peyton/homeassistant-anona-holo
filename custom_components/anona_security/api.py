@@ -575,10 +575,7 @@ class AnonaApi:
             or handshake_ack.ack_code != HTTP_STATUS_OK
             or handshake_ack.operate_id != operate_id
         ):
-            message = (
-                "Websocket handshake failed with payload "
-                f"{handshake_ack.raw!r}"
-            )
+            message = f"Websocket handshake failed with payload {handshake_ack.raw!r}"
             raise AnonaCommandError(message)
 
     async def _await_websocket_command_result(
@@ -601,8 +598,7 @@ class AnonaApi:
                 if message.operate_id == operate_id:
                     if message.ack_code != HTTP_STATUS_OK:
                         error_message = (
-                            "Websocket command ack failed with payload "
-                            f"{message.raw!r}"
+                            f"Websocket command ack failed with payload {message.raw!r}"
                         )
                         raise AnonaCommandError(error_message)
                     ack_received = True
@@ -617,8 +613,7 @@ class AnonaApi:
                 continue
             if message.device_id not in {None, device_id}:
                 error_message = (
-                    "Websocket command returned a mismatched deviceId: "
-                    f"{message.raw!r}"
+                    f"Websocket command returned a mismatched deviceId: {message.raw!r}"
                 )
                 raise AnonaCommandError(error_message)
             if not ack_received:

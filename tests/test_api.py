@@ -481,13 +481,13 @@ def test_lock_and_unlock_send_live_compatible_websocket_frames(
 ) -> None:
     """Public lock control should send the verified websocket command flow."""
     time_values = iter(
-            [
-                FIXTURE["websocket_commands"]["handshake"]["ts"] * 1_000_000,
-                int(FIXTURE["websocket_commands"]["lock"]["operate_id"]) * 1_000,
-                FIXTURE["websocket_commands"]["handshake"]["ts"] * 1_000_000,
-                int(FIXTURE["websocket_commands"]["unlock"]["operate_id"]) * 1_000,
-            ]
-        )
+        [
+            FIXTURE["websocket_commands"]["handshake"]["ts"] * 1_000_000,
+            int(FIXTURE["websocket_commands"]["lock"]["operate_id"]) * 1_000,
+            FIXTURE["websocket_commands"]["handshake"]["ts"] * 1_000_000,
+            int(FIXTURE["websocket_commands"]["unlock"]["operate_id"]) * 1_000,
+        ]
+    )
     monkeypatch.setattr(api_module.time, "time_ns", lambda: next(time_values))
     websocket_lock = _FakeWebsocket(
         [

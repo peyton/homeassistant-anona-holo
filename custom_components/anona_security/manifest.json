@@ -1,12 +1,13 @@
 {
   "domain": "anona_security",
   "name": "Anona Security",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "documentation": "https://github.com/peyton/homeassistant-anona-security",
   "issue_tracker": "https://github.com/peyton/homeassistant-anona-security/issues",
   "requirements": ["aiohttp>=3.9.0"],
   "dependencies": [],
-  "codeowners": [],
+  "codeowners": ["@peyton"],
   "iot_class": "cloud_polling",
+  "integration_type": "hub",
   "config_flow": true
 }

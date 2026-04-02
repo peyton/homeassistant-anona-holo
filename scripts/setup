@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-python3 -m pip install --requirement requirements.txt
+uv venv --allow-existing .venv
+uv pip install --python .venv/bin/python -r requirements.txt

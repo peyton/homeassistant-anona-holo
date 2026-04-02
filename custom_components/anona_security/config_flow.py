@@ -54,7 +54,7 @@ class AnonaSecurityConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 homes = await api.get_homes()
             except AnonaAuthError:
                 errors["base"] = "invalid_auth"
-            except (aiohttp.ClientError, TimeoutError):
+            except aiohttp.ClientError, TimeoutError:
                 errors["base"] = "cannot_connect"
             except AnonaApiError:
                 errors["base"] = "unknown"
