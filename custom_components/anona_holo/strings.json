@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Anona Security",
-        "description": "Enter your Anona Security app credentials.",
+        "title": "Anona Holo",
+        "description": "Enter your Anona Holo app credentials.",
         "data": {
           "email": "Email address",
           "password": "Password"
@@ -12,7 +12,7 @@
     },
     "error": {
       "invalid_auth": "Invalid email or password.",
-      "cannot_connect": "Cannot connect to Anona Security servers.",
+      "cannot_connect": "Cannot connect to Anona Holo servers.",
       "unknown": "Unexpected error. Check logs for details."
     },
     "abort": {

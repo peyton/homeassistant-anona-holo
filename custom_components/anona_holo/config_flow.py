@@ -1,4 +1,4 @@
-"""Config flow for the Anona Security integration."""
+"""Config flow for the Anona Holo integration."""
 
 from __future__ import annotations
 
@@ -24,8 +24,8 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class AnonaSecurityConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle the Home Assistant config flow for Anona Security."""
+class AnonaHoloConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle the Home Assistant config flow for Anona Holo."""
 
     VERSION = 2
 
@@ -69,7 +69,7 @@ class AnonaSecurityConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "unknown"
                 else:
                     return self.async_create_entry(
-                        title=f"Anona Security ({email})",
+                        title=f"Anona Holo ({email})",
                         data={
                             CONF_EMAIL: email,
                             CONF_PASSWORD: password,

@@ -1,4 +1,4 @@
-"""Tests for the Anona Security lock entity."""
+"""Tests for the Anona Holo lock entity."""
 
 # ruff: noqa: S101, PLR2004
 
@@ -9,14 +9,14 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 
-from custom_components.anona_security.api import (
+from custom_components.anona_holo.api import (
     AnonaApiError,
     DeviceContext,
     LockStatus,
     OnlineStatus,
 )
-from custom_components.anona_security.const import DEVICE_TYPE_LOCK, DOMAIN
-from custom_components.anona_security.lock import AnonaSecurityLock, async_setup_entry
+from custom_components.anona_holo.const import DEVICE_TYPE_LOCK, DOMAIN
+from custom_components.anona_holo.lock import AnonaHoloLock, async_setup_entry
 
 LOCK_DEVICE = DeviceContext(
     device_id="device-123",
@@ -74,7 +74,7 @@ def test_lock_entity_maps_status_objects_and_dispatches_commands() -> None:
     api.lock = AsyncMock()
     api.unlock = AsyncMock()
 
-    entity = AnonaSecurityLock(api, LOCK_DEVICE)
+    entity = AnonaHoloLock(api, LOCK_DEVICE)
 
     asyncio.run(entity.async_update())
     asyncio.run(entity.async_unlock())
@@ -102,7 +102,7 @@ def test_lock_entity_marks_itself_unavailable_after_online_error() -> None:
     api = Mock()
     api.get_device_online_status = AsyncMock(side_effect=AnonaApiError("boom"))
 
-    entity = AnonaSecurityLock(api, LOCK_DEVICE)
+    entity = AnonaHoloLock(api, LOCK_DEVICE)
 
     asyncio.run(entity.async_update())
 
@@ -116,11 +116,11 @@ def test_async_setup_entry_only_adds_lock_devices() -> None:
     api.get_devices = AsyncMock(return_value=[LOCK_DEVICE, OTHER_DEVICE])
     hass = SimpleNamespace(data={DOMAIN: {"entry-1": api}})
     entry = SimpleNamespace(entry_id="entry-1")
-    added_entities: list[AnonaSecurityLock] = []
+    added_entities: list[AnonaHoloLock] = []
     update_before_add_flags: list[bool] = []
 
     def add_entities(
-        new_entities: list[AnonaSecurityLock],
+        new_entities: list[AnonaHoloLock],
         update_before_add: object | None = None,
     ) -> None:
         added_entities.extend(new_entities)

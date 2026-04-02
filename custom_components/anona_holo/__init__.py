@@ -1,4 +1,4 @@
-"""Home Assistant setup for the Anona Security integration."""
+"""Home Assistant setup for the Anona Holo integration."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ PLATFORMS: list[Platform] = [Platform.LOCK]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up an Anona Security config entry."""
+    """Set up an Anona Holo config entry."""
     api = AnonaApi(
         async_get_clientsession(hass),
         client_uuid=entry.data[CONF_CLIENT_UUID],
@@ -57,7 +57,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload an Anona Security config entry."""
+    """Unload an Anona Holo config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)

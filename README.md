@@ -1,16 +1,30 @@
-# Anona Security
+# Anona Holo
 
-Home Assistant custom integration for Anona smart locks.
+Home Assistant custom integration for the Anona Holo smart lock, available [here](https://www.anonasecurity.com/products/holo).
+
+## Supported Features
+
+This integration currently supports:
+
+- lock and unlock commands
+- lock state
+- online and availability state
+- battery level
+- current lock diagnostics exposed through entity attributes
+
+This integration does not support the Anona Holo Keypad. Raw keypad-related diagnostic fields may still appear in lock attributes because the upstream lock status payload includes them, but no keypad entity or keypad controls are provided.
 
 ## HACS
 
 This integration is structured for HACS distribution:
 
 1. Add this repository to HACS as a custom integration repository, or install it directly once the repository is published in HACS.
-2. Install `Anona Security`.
+2. Install `Anona Holo`.
 3. Restart Home Assistant.
 4. Add the integration from `Settings -> Devices & services`.
 5. Sign in with the same email address and password you use in the Anona app.
+
+If you already installed the previous version of this integration, remove it first and then add the renamed `anona_holo` integration again. This rename is a breaking change and does not include a migration path for existing installs.
 
 Minimum tested Home Assistant version: `2026.3.4`
 
@@ -56,7 +70,7 @@ For local Home Assistant development, run `just develop`. It will create an igno
 
 ## Repository Notes
 
-- Runtime code lives in `custom_components/anona_security`.
+- Runtime code lives in `custom_components/anona_holo`.
 - Fixture-backed tests live in `tests/`.
 - The migration exec plan is in [`docs/execplans/2026-04-01-align-anona-security-with-captured-api.md`](docs/execplans/2026-04-01-align-anona-security-with-captured-api.md).
 - The websocket command capture note is in [`docs/2026-04-02-anona-websocket-command-capture.md`](docs/2026-04-02-anona-websocket-command-capture.md).

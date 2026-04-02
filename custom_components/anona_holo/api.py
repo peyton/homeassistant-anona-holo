@@ -1,4 +1,4 @@
-"""Anona Security API client aligned with the captured mobile app traffic."""
+"""Anona Holo API client aligned with the captured mobile app traffic."""
 
 from __future__ import annotations
 

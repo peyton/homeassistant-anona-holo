@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any, Self, cast
 
 from aiohttp import WSMsgType
 
-import custom_components.anona_security.api as api_module
-from custom_components.anona_security.api import (
+import custom_components.anona_holo.api as api_module
+from custom_components.anona_holo.api import (
     AnonaApi,
     WebsocketMessage,
     build_authenticated_signature,
@@ -29,7 +29,7 @@ from custom_components.anona_security.api import (
     normalize_device_context,
     parse_lock_status,
 )
-from custom_components.anona_security.const import (
+from custom_components.anona_holo.const import (
     APP_CHANNEL,
     APP_DEVICE_TYPE,
     COMMAND_ID_LOCK,

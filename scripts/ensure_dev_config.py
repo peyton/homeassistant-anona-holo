@@ -30,7 +30,7 @@ http:
 logger:
     default: info
     logs:
-        custom_components.anona_security: debug
+        custom_components.anona_holo: debug
 """
 
 

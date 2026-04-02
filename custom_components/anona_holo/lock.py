@@ -1,4 +1,4 @@
-"""Lock platform for the Anona Security integration."""
+"""Lock platform for the Anona Holo integration."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ async def async_setup_entry(
     api: AnonaApi = hass.data[DOMAIN][entry.entry_id]
     devices = await api.get_devices()
     entities = [
-        AnonaSecurityLock(api, device)
+        AnonaHoloLock(api, device)
         for device in devices
         if device.device_type == DEVICE_TYPE_LOCK
     ]
@@ -42,7 +42,7 @@ async def async_setup_entry(
     async_add_entities(entities, update_before_add=True)
 
 
-class AnonaSecurityLock(LockEntity):
+class AnonaHoloLock(LockEntity):
     """Representation of a single Anona smart lock."""
 
     _attr_has_entity_name = True
@@ -56,7 +56,7 @@ class AnonaSecurityLock(LockEntity):
         self._attr_unique_id = f"{DOMAIN}_{device.device_id}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device.device_id)},
-            manufacturer="Anona Security",
+            manufacturer="Anona Holo",
             model=self._device.model,
             name=self._device.nickname,
             serial_number=self._device.serial_number,
