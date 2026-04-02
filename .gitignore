@@ -20,5 +20,4 @@ build/
 dist/
 
 # Home Assistant configuration
-config/*
-!config/configuration.yaml
+config/

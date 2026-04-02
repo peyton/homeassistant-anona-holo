@@ -7,20 +7,20 @@ bootstrap:
 
 lint:
     if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then \
-        hk run check $(find custom_components tests .github/workflows -type f -print); \
+        hk run check $(find custom_components tests scripts .github/workflows -type f -print); \
     else \
-        ruff format --quiet custom_components tests --check; \
-        ruff check custom_components tests; \
+        ruff format --quiet custom_components tests scripts --check; \
+        ruff check custom_components tests scripts; \
         actionlint .github/workflows/*.yml; \
         ghalint run; \
     fi
 
 fix:
     if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then \
-        hk run fix $(find custom_components tests .github/workflows -type f -print); \
+        hk run fix $(find custom_components tests scripts .github/workflows -type f -print); \
     else \
-        ruff format --quiet custom_components tests; \
-        ruff check --fix custom_components tests; \
+        ruff format --quiet custom_components tests scripts; \
+        ruff check --fix custom_components tests scripts; \
         actionlint .github/workflows/*.yml; \
         ghalint run; \
     fi
@@ -30,7 +30,7 @@ typecheck:
     XDG_CACHE_HOME="${XDG_CACHE_HOME:-/tmp/xdg-cache}"; \
     UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"; \
     UV_TOOL_DIR="${UV_TOOL_DIR:-/tmp/uv-tools}"; \
-    XDG_CACHE_HOME="${XDG_CACHE_HOME}" UV_CACHE_DIR="${UV_CACHE_DIR}" UV_TOOL_DIR="${UV_TOOL_DIR}" uvx --from "${PYRIGHT_PACKAGE}" pyright --pythonpath ./.venv/bin/python custom_components/anona_security tests
+    XDG_CACHE_HOME="${XDG_CACHE_HOME}" UV_CACHE_DIR="${UV_CACHE_DIR}" UV_TOOL_DIR="${UV_TOOL_DIR}" uvx --from "${PYRIGHT_PACKAGE}" pyright --pythonpath ./.venv/bin/python custom_components/anona_security tests scripts
 
 test:
     .venv/bin/python -m pytest -q
@@ -45,10 +45,7 @@ develop:
         echo "Missing virtual environment. Run 'mise bootstrap' first." >&2; \
         exit 1; \
     fi
-    if [[ ! -d "${PWD}/config" ]]; then \
-        mkdir -p "${PWD}/config"; \
-        .venv/bin/hass --config "${PWD}/config" --script ensure_config; \
-    fi
+    .venv/bin/python -m scripts.ensure_dev_config --config-dir "${PWD}/config"
     export PYTHONPATH="${PYTHONPATH:-}:${PWD}/custom_components"
     exec .venv/bin/hass --config "${PWD}/config" --debug
 
