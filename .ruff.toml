@@ -12,7 +12,10 @@ ignore = [
     "D203", # no-blank-line-before-class (incompatible with formatter)
     "D212", # multi-line-summary-first-line (incompatible with formatter)
     "COM812", # incompatible with formatter
+    "EM101", # exception string literals are acceptable in this repo
+    "EM102", # exception f-strings are acceptable in this repo
     "ISC001", # incompatible with formatter
+    "TRY003", # long exception messages do not justify custom exception types here
 ]
 
 [lint.flake8-pytest-style]

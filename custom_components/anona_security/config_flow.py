@@ -1,31 +1,39 @@
-"""Config flow for the Anona-backed lock integration."""
+"""Config flow for the Anona Security integration."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
+from uuid import uuid4
 
 import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import AnonaApi, AnonaAuthError
-from .const import CONF_EMAIL, CONF_PASSWORD, DOMAIN
+from .api import AnonaApi, AnonaApiError, AnonaAuthError, AnonaSignatureError
+from .const import (
+    CONF_CLIENT_UUID,
+    CONF_EMAIL,
+    CONF_HOME_ID,
+    CONF_PASSWORD,
+    CONF_USER_ID,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class IntegrationBlueprintConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for the lock integration."""
+class AnonaSecurityConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle the Home Assistant config flow for Anona Security."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.ConfigFlowResult:
-        """Handle the initial config flow step."""
+        """Handle the initial credential entry step."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -35,28 +43,43 @@ class IntegrationBlueprintConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(email.lower())
             self._abort_if_unique_id_configured()
 
-            api = AnonaApi(async_get_clientsession(self.hass))
+            client_uuid = str(uuid4()).upper()
+            api = AnonaApi(
+                async_get_clientsession(self.hass),
+                client_uuid=client_uuid,
+            )
 
             try:
-                await api.login(email, password)
+                login_context = await api.login(email, password)
+                homes = await api.get_homes()
+            except AnonaSignatureError:
+                errors["base"] = "signature_unavailable"
             except AnonaAuthError:
                 errors["base"] = "invalid_auth"
             except aiohttp.ClientError, TimeoutError:
                 errors["base"] = "cannot_connect"
+            except AnonaApiError:
+                errors["base"] = "unknown"
             except Exception:  # pragma: no cover - defensive Home Assistant guard
-                _LOGGER.exception("Unexpected error during login")
+                _LOGGER.exception("Unexpected error during config flow")
                 errors["base"] = "unknown"
             else:
-                return self.async_create_entry(
-                    title=f"Anona Holo ({email})",
-                    data={
-                        CONF_EMAIL: email,
-                        CONF_PASSWORD: password,
-                        "access_token": api.access_token,
-                        "user_id": api.user_id,
-                        "home_id": api.home_id,
-                    },
-                )
+                home_id = api.home_id
+                if home_id is None and homes:
+                    home_id = homes[0].home_id
+                if home_id is None:
+                    errors["base"] = "unknown"
+                else:
+                    return self.async_create_entry(
+                        title=f"Anona Security ({email})",
+                        data={
+                            CONF_EMAIL: email,
+                            CONF_PASSWORD: password,
+                            CONF_CLIENT_UUID: client_uuid,
+                            CONF_USER_ID: login_context.user_id,
+                            CONF_HOME_ID: home_id,
+                        },
+                    )
 
         return self.async_show_form(
             step_id="user",

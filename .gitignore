@@ -5,13 +5,13 @@ __pycache__
 */build/*
 */dist/*
 
-
 # misc
 .coverage
 .vscode
+.venv
 coverage.xml
 .ruff_cache
-
+.pyright
 
 # Home Assistant configuration
 config/*

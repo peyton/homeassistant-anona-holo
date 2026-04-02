@@ -1,4 +1,4 @@
-"""Lock platform for the Anona-backed integration."""
+"""Lock platform for the Anona Security integration."""
 
 from __future__ import annotations
 
@@ -7,8 +7,9 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.lock import LockEntity, LockEntityFeature
+from homeassistant.helpers.device_registry import DeviceInfo
 
-from .api import AnonaApi, AnonaApiError
+from .api import AnonaApi, AnonaApiError, DeviceContext, LockStatus, OnlineStatus
 from .const import DEVICE_TYPE_LOCK, DOMAIN, UPDATE_INTERVAL_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,20 +30,11 @@ async def async_setup_entry(
     """Set up lock entities from a config entry."""
     api: AnonaApi = hass.data[DOMAIN][entry.entry_id]
     devices = await api.get_devices()
-    entities: list[IntegrationBlueprintLock] = []
-
-    for device in devices:
-        device_type = device.get("deviceType")
-        if device_type is not None and int(device_type) != DEVICE_TYPE_LOCK:
-            continue
-
-        device_id = _device_identifier(device)
-        if not device_id:
-            _LOGGER.warning("Skipping lock device without an identifier: %s", device)
-            continue
-
-        name = str(device.get("deviceName") or "Anona Holo")
-        entities.append(IntegrationBlueprintLock(api, device_id, name))
+    entities = [
+        AnonaSecurityLock(api, device)
+        for device in devices
+        if device.device_type == DEVICE_TYPE_LOCK
+    ]
 
     if not entities:
         _LOGGER.warning("No compatible lock devices found in device list")
@@ -50,54 +42,97 @@ async def async_setup_entry(
     async_add_entities(entities, update_before_add=True)
 
 
-class IntegrationBlueprintLock(LockEntity):
-    """Representation of an Anona Holo lock."""
+class AnonaSecurityLock(LockEntity):
+    """Representation of a single Anona smart lock."""
 
     _attr_has_entity_name = True
     _attr_supported_features = LockEntityFeature(0)
 
-    def __init__(self, api: AnonaApi, device_id: str, name: str) -> None:
+    def __init__(self, api: AnonaApi, device: DeviceContext) -> None:
         """Initialize the lock entity."""
         self._api = api
-        self._device_id = device_id
-        self._attr_name = name
-        self._attr_unique_id = f"{DOMAIN}_{device_id}"
+        self._device = device
+        self._attr_name = device.nickname
+        self._attr_unique_id = f"{DOMAIN}_{device.device_id}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._device.device_id)},
+            manufacturer="Anona Security",
+            model=self._device.model,
+            name=self._device.nickname,
+            serial_number=self._device.serial_number,
+        )
         self._attr_is_locked: bool | None = None
         self._attr_available = False
-        self._attr_extra_state_attributes: dict[str, Any] = {"device_id": device_id}
-        self._battery: int | None = None
+        self._attr_extra_state_attributes = self._build_attrs(None, None)
 
     async def async_update(self) -> None:
-        """Refresh the lock state from the cloud API."""
+        """Refresh online and lock-state information from the cloud API."""
         try:
-            status = await self._api.get_device_status(self._device_id)
+            online_status = await self._api.get_device_online_status(self._device)
         except AnonaApiError as err:
-            _LOGGER.debug("Status poll failed for %s: %s", self._device_id, err)
+            _LOGGER.debug("Online poll failed for %s: %s", self._device.device_id, err)
             self._attr_available = False
             return
 
-        self._attr_is_locked = self._api.is_locked(status)
-        self._attr_available = self._api.is_online(status)
-        self._battery = self._api.battery_level(status)
-        self._attr_extra_state_attributes = {"device_id": self._device_id}
-        if self._battery is not None:
-            self._attr_extra_state_attributes["battery_level"] = self._battery
+        self._attr_available = online_status.online
+
+        try:
+            lock_status = await self._api.get_device_status(self._device)
+        except AnonaApiError as err:
+            _LOGGER.debug("Status poll failed for %s: %s", self._device.device_id, err)
+            self._attr_extra_state_attributes = self._build_attrs(online_status, None)
+            return
+
+        self._attr_is_locked = lock_status.locked
+        self._attr_extra_state_attributes = self._build_attrs(
+            online_status, lock_status
+        )
 
     async def async_lock(self, **_: Any) -> None:
-        """Lock the device through the WebSocket command path."""
-        await self._api.lock(self._device_id)
-        self._attr_is_locked = True
+        """Attempt to lock the device through the blocked command path."""
+        await self._api.lock(self._device)
 
     async def async_unlock(self, **_: Any) -> None:
-        """Unlock the device through the WebSocket command path."""
-        await self._api.unlock(self._device_id)
-        self._attr_is_locked = False
+        """Attempt to unlock the device through the blocked command path."""
+        await self._api.unlock(self._device)
 
-
-def _device_identifier(device: dict[str, Any]) -> str | None:
-    """Resolve the best identifier field from a device payload."""
-    for key in ("deviceId", "sn", "did"):
-        value = device.get(key)
-        if value:
-            return str(value)
-    return None
+    def _build_attrs(
+        self,
+        online_status: OnlineStatus | None,
+        lock_status: LockStatus | None,
+    ) -> dict[str, Any]:
+        """Build the entity attribute mapping from the latest status objects."""
+        attrs: dict[str, Any] = {
+            "device_id": self._device.device_id,
+            "device_type": self._device.device_type,
+            "device_module": self._device.device_module,
+            "device_channel": self._device.device_channel,
+            "serial_number": self._device.serial_number,
+            "model": self._device.model,
+        }
+        if online_status is not None:
+            attrs["online"] = online_status.online
+            attrs["create_ts"] = online_status.create_ts
+            attrs["last_alive_ts"] = online_status.last_alive_ts
+        if lock_status is not None:
+            attrs["raw_data_hex_str"] = lock_status.data_hex_str
+            attrs["raw_status_fields"] = lock_status.raw_fields
+            attrs["lock_status_code"] = lock_status.lock_status_code
+            attrs["door_status_code"] = lock_status.door_status_code
+            attrs["has_locking_fail"] = lock_status.has_locking_fail
+            attrs["has_door_been_open_long_time"] = (
+                lock_status.has_door_been_open_long_time
+            )
+            attrs["calibration_status_code"] = lock_status.calibration_status_code
+            attrs["keypad_connection_status_code"] = (
+                lock_status.keypad_connection_status_code
+            )
+            attrs["keypad_battery_capacity"] = lock_status.keypad_battery_capacity
+            attrs["keypad_status_code"] = lock_status.keypad_status_code
+            attrs["refresh_ts"] = lock_status.refresh_ts
+            attrs["start_type"] = lock_status.start_type
+            if lock_status.battery_capacity is not None:
+                attrs["battery_level"] = lock_status.battery_capacity
+            if lock_status.battery_voltage is not None:
+                attrs["battery_voltage"] = lock_status.battery_voltage
+        return attrs

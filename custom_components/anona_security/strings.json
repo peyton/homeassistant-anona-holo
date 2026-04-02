@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Anona Holo Smart Lock",
+        "title": "Anona Security",
         "description": "Enter your Anona Security app credentials.",
         "data": {
           "email": "Email address",
@@ -13,6 +13,7 @@
     "error": {
       "invalid_auth": "Invalid email or password.",
       "cannot_connect": "Cannot connect to Anona Security servers.",
+      "signature_unavailable": "Anona request signing is not solved yet. A fresh native signer capture is still required.",
       "unknown": "Unexpected error. Check logs for details."
     },
     "abort": {

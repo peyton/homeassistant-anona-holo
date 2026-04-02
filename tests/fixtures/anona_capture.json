@@ -1,0 +1,134 @@
+{
+  "server_ts": 1775103534323,
+  "plain_error_response": {
+    "resultBodyObject": null,
+    "error": true,
+    "errorMessage": "sig not passed",
+    "errorCode": -1
+  },
+  "signature_fixture": {
+    "ts": 1775103534237,
+    "client_uuid": "D294537B-5907-5ECB-92FB-F0C32D3CC82B73",
+    "channel": 73001001,
+    "token": "session-token",
+    "lookup_key": "637b7586a24e1d1b785f53ac3d5edf1b",
+    "migration_key": "1775103534237_session-token"
+  },
+  "login": {
+    "email": "user@example.com",
+    "password": "correct horse battery staple",
+    "sig": "fixture-login-sig",
+    "response_object": {
+      "token": "session-token",
+      "waitForDelete": 0,
+      "deleteDate": null,
+      "channel": 73001001,
+      "userID": 533291,
+      "userName": "Peyton",
+      "mobileNeeded": false,
+      "confFileUrl": null,
+      "guideStatus": 0,
+      "applicationCode": null
+    }
+  },
+  "homes": {
+    "sig": "fixture-homes-sig",
+    "response_object": {
+      "userId": 533291,
+      "defaultHome": {
+        "homeId": "home-123",
+        "homeName": "Bay",
+        "defaultHome": 0,
+        "homeType": 1,
+        "homeWallpaperName": "https://assets.anonasecurity.com/anona/img_7.png",
+        "homeWallpaperType": 0,
+        "createHomeTimeStamp": 1738618925000,
+        "acceptTimeStamp": null
+      },
+      "actualHomeNameList": [
+        {
+          "homeId": "home-123",
+          "homeName": "Bay",
+          "defaultHome": 0,
+          "homeType": 1,
+          "homeWallpaperName": "https://assets.anonasecurity.com/anona/img_7.png",
+          "homeWallpaperType": 0,
+          "createHomeTimeStamp": 1738618925000,
+          "acceptTimeStamp": null
+        }
+      ],
+      "virtualSharedHomeId": "virtual-home-456",
+      "virtualSharedHomeDeviceIdList": []
+    }
+  },
+  "device_list": {
+    "sig": "fixture-device-list-sig",
+    "response_object": [
+      {
+        "type": 76,
+        "module": 76001,
+        "channel": 76001001,
+        "deviceId": "device-123",
+        "deviceNickName": "Front Door Lock",
+        "bindTime": 1767882247000,
+        "lastOnlineTs": 1775089224000,
+        "createTimeStamp": 1738618989000,
+        "updateTimeStamp": 1767882247000,
+        "timezoneId": "America/Los_Angeles",
+        "softwareVersionNumber": "1.5.189",
+        "softwareSubVersion": "a",
+        "model": "SL2001",
+        "sn": "SN-LOCK-123",
+        "ip": "192.168.2.209",
+        "deviceRelations": null
+      },
+      {
+        "type": 42,
+        "module": 42001,
+        "channel": 42001001,
+        "deviceId": "device-999",
+        "deviceNickName": "Ignored Sensor",
+        "model": "SENSOR42",
+        "sn": "SN-SENSOR-999"
+      }
+    ]
+  },
+  "online_status": {
+    "sig": "fixture-online-sig",
+    "response_object": {
+      "online": true,
+      "createTs": 1775103001462,
+      "lastAliveTs": null
+    }
+  },
+  "device_status": {
+    "sig": "fixture-status-sig",
+    "response_object": {
+      "startType": 48,
+      "deviceType": 76,
+      "deviceModule": 76001,
+      "deviceChannel": 76001001,
+      "deviceId": "device-123",
+      "refreshTs": 1775103452000,
+      "dataHexStr": "080110011a040a0208642001280030003a100a0010001a040a02080020002a00320040004800520208025a05080110b4016202080068007204080010017a0208018001008a01020802"
+    }
+  },
+  "device_certs": {
+    "sig": "fixture-certs-sig",
+    "response_object": {
+      "deviceId": "device-123",
+      "deviceCerts": "-----BEGIN CERTIFICATE-----\nDEVICE CERT\n-----END CERTIFICATE-----",
+      "userCerts": "-----BEGIN CERTIFICATE-----\nUSER CERT\n-----END CERTIFICATE-----",
+      "userCertsPriKey": "-----BEGIN EC PRIVATE KEY-----\nPRIVATE KEY\n-----END EC PRIVATE KEY-----"
+    }
+  },
+  "websocket": {
+    "sig": "fixture-websocket-sig",
+    "response_object": {
+      "websocketAddress": "wss://websocketforappv2.anonasecurity.com:10006/websocket",
+      "websocketToken": "ws-session-token",
+      "websocketAesKey": "1005206B0BE3E571D03228AB2034AA5A",
+      "appToken": null
+    }
+  }
+}

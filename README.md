@@ -1,46 +1,38 @@
-# Notice
+# Anona Security
 
-The component and platforms in this repository are not meant to be used by a
-user, but as a "blueprint" that custom component developers can build
-upon, to make more awesome stuff.
+Home Assistant custom integration for Anona smart locks.
 
-HAVE FUN! 😎
+## Status
 
-## Why?
+This repository now matches the captured HTTP API shape from the Anona mobile app:
 
-This is simple, by having custom_components look (README + structure) the same
-it is easier for developers to help each other and for users to start using them.
+- base64 response envelopes with `resultBodyObject`, `error`, and `errorCode`
+- server-time bootstrap via `/baseServiceApi/V2/getTs`
+- normalized home and device discovery
+- online state from `/anona/device/api/getDeviceOnlineStatus`
+- lock state and battery parsing from `dataHexStr`
 
-If you are a developer and you want to add things to this "blueprint" that you think more
-developers will have use for, please open a PR to add it :)
+Two live-control gaps remain intentionally blocked:
 
-## What?
+1. Login and every authenticated request still require the app's native `sig` producer. The cache lookup flow is reversed, but the signer itself is not.
+2. Lock and unlock still require a websocket capture that includes `authSync`, `lockDoor`, and `unLockDoor` frames.
 
-This repository contains multiple files, here is a overview:
+Until those are captured, the integration keeps signing and command execution behind explicit errors instead of sending guessed requests.
 
-File | Purpose | Documentation
--- | -- | --
-`.devcontainer.json` | Used for development/testing with Visual Studio Code. | [Documentation](https://code.visualstudio.com/docs/remote/containers)
-`.github/ISSUE_TEMPLATE/*.yml` | Templates for the issue tracker | [Documentation](https://help.github.com/en/github/building-a-strong-community/configuring-issue-templates-for-your-repository)
-`custom_components/integration_blueprint/*` | Integration files, this is where everything happens. | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)
-`CONTRIBUTING.md` | Guidelines on how to contribute. | [Documentation](https://help.github.com/en/github/building-a-strong-community/setting-guidelines-for-repository-contributors)
-`LICENSE` | The license file for the project. | [Documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/licensing-a-repository)
-`README.md` | The file you are reading now, should contain info about the integration, installation and configuration instructions. | [Documentation](https://help.github.com/en/github/writing-on-github/basic-writing-and-formatting-syntax)
-`requirements.txt` | Python packages used for development/lint/testing this integration. | [Documentation](https://pip.pypa.io/en/stable/user_guide/#requirements-files)
+## Development
 
-## How?
+From a clean checkout:
 
-1. Create a new repository in GitHub, using this repository as a template by clicking the "Use this template" button in the GitHub UI.
-1. Open your new repository in Visual Studio Code devcontainer (Preferably with the "`Dev Containers: Clone Repository in Named Container Volume...`" option).
-1. Rename all instances of the `integration_blueprint` to `custom_components/<your_integration_domain>` (e.g. `custom_components/awesome_integration`).
-1. Rename all instances of the `Integration Blueprint` to `<Your Integration Name>` (e.g. `Awesome Integration`).
-1. Run the `scripts/develop` to start HA and test out your new integration.
+```bash
+UV_CACHE_DIR=/tmp/uv-cache uv venv .venv
+UV_CACHE_DIR=/tmp/uv-cache uv pip install --python .venv/bin/python -r requirements.txt
+.venv/bin/ruff check custom_components/anona_security tests
+uvx pyright custom_components/anona_security tests
+.venv/bin/python -m pytest
+```
 
-## Next steps
+## Repository Notes
 
-These are some next steps you may want to look into:
-- Add tests to your integration, [`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) can help you get started.
-- Add brand images (logo/icon).
-- Create your first release.
-- Share your integration on the [Home Assistant Forum](https://community.home-assistant.io/).
-- Submit your integration to [HACS](https://hacs.xyz/docs/publish/start).
+- Runtime code lives in `custom_components/anona_security`.
+- Fixture-backed tests live in `tests/`.
+- The migration exec plan is in [`docs/execplans/2026-04-01-align-anona-security-with-captured-api.md`](docs/execplans/2026-04-01-align-anona-security-with-captured-api.md).
