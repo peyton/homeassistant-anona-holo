@@ -27,6 +27,8 @@ The HTTP signer is now solved and verified live against the production API. Home
 - [x] (2026-04-02 10:14Z) Verified live that login succeeds with `deviceToken=""` and a random UUID, and that every required authenticated HTTP endpoint accepts `sig = md5(token + uuid + channel + ts + salt)`.
 - [x] (2026-04-02 10:33Z) Replaced the temporary signer blocker with the verified login and authenticated signature helpers, fixed `getTs` to POST `{}`, updated the config flow and docs, and rewrote the tests to assert the real signer behavior.
 - [x] (2026-04-02 10:44Z) Re-ran repo-local validation after the live-signer patch set: `ruff` passed, `uvx pyright --pythonpath ./.venv/bin/python` passed with 0 errors, and `pytest` passed with 18 tests green.
+- [x] (2026-04-02 11:11Z) Captured live websocket lock and unlock exchanges from the macOS app by turning the Bluetooth controller off, forcing the app off the local `MatterLock` BLE path and onto the cloud websocket path.
+- [x] (2026-04-02 11:13Z) Recorded the websocket bootstrap, handshake, outbound command payloads, websocket acks, and parsed remote status pushes in `/Users/peyton/ghq/github.com/peyton/homeassistant-anona-security/docs/2026-04-02-anona-websocket-command-capture.md`.
 
 ## Surprises & Discoveries
 
@@ -44,6 +46,15 @@ The HTTP signer is now solved and verified live against the production API. Home
 
 - Observation: The HAR does not include websocket frames, so live lock and unlock traffic still cannot be reproduced safely.
   Evidence: the HAR entries include HTTP requests for `getDeviceCertsForOwner` and `getWebsocketAddress`, but there are no captured websocket frame payloads to reconstruct `authSync`, `lockDoor`, or `unLockDoor`.
+
+- Observation: The app strongly prefers the local BLE path when the controller is available, but falls back to cloud websocket commands when macOS Bluetooth power is off.
+  Evidence: with Bluetooth on, command attempts logged `MatterLock` peripheral writes in `MaiBleTransmitUtils+Lock.swift` and `MaiBleTransmitDataManager+Lock.swift`; after switching macOS Bluetooth to `State: Off`, the same UI gestures logged `LockWebSocketChannelDataHandler.swift` with `lockDoor` / `unLockDoor`, websocket acks, and remote websocket pushes instead of BLE writes.
+
+- Observation: The cloud-only command capture exposes stable outbound protobuf hex for both lock and unlock.
+  Evidence: the lock run logged `contentStr = 083010079203062a0408abc620` with `sendID = 7`, while the unlock run logged `contentStr = 083010069203062a0408abc620` with `sendID = 6`.
+
+- Observation: The websocket command run did not emit a separate websocket `authSync`; the only explicit `lockAuthSync` in the session was BLE-specific.
+  Evidence: `rg -n 'authSync|AuthSync|sync' /tmp/anona-live.log` showed `LockProto+Authentication.swift` and `MaiBleConnectManager+Extension.swift` only around the BLE path at 04:06:06-04:06:07, while the successful cloud-only commands at 04:10:12 and 04:10:51 went straight from websocket connect/handshake to `lockDoor` / `unLockDoor`.
 
 - Observation: The H5 signer surface is owned by `PubBaseWebController`, while the proxy request and response models are native Swift types in the same module.
   Evidence: `xcrun otool -ov .../Anona | sed -n '142244,142430p;178247,178340p;183322,183350p'` shows `_TtC11PublicUIKit20PubBaseWebController` with ivars `deviceType`, `deviceModule`, `channel`, `deviceId`, `messageHandlers`, and `jsBridge`, plus `_TtC11PublicUIKit12PubH5Request.data` and `_TtC11PublicUIKit18PubH5ProxyResponse.{error,errorCode,resultBodyObject}`. `strings -a .../Anona | rg 'requestSign|performHttpRequest|checkRegisterHandler|PubBaseWebController.swift|PubDataNetwork\\+H5.swift'` places those bridge commands and both source paths in the same binary.
@@ -65,15 +76,19 @@ The HTTP signer is now solved and verified live against the production API. Home
   Rationale: the plan already requires a second capture with websocket frames before reproducing the command channel. The correct interim behavior is a clear runtime error, not a best-effort JSON guess.
   Date/Author: 2026-04-01 / Codex
 
+- Decision: Treat the websocket capture prerequisite as satisfied and keep the next scope focused on implementation, not more reverse engineering.
+  Rationale: the repo now has a live cloud-only websocket capture with the bootstrap handshake, command payload hex, ack shape, and parsed remote status pushes for both `lockDoor` and `unLockDoor`. More capture work is lower leverage than implementing and validating that command path.
+  Date/Author: 2026-04-02 / Codex
+
 - Decision: Treat the `dataHexStr` parser as an inferred protobuf-wire decoder and expose uncertain diagnostics as numeric codes and raw fields.
   Rationale: the app metadata confirms the response model fields, but the provided capture does not prove every field-number-to-property mapping. Returning explicit codes and raw state keeps the integration debuggable without inventing false semantics.
   Date/Author: 2026-04-01 / Codex
 
 ## Outcomes & Retrospective
 
-This plan started as a full API migration and remains that in structure, but the implementation boundary has moved forward. The captured and proven parts now include the HTTP signer, login, home discovery, device discovery, online polling, lock-status polling, device-cert fetch, websocket bootstrap fetch, and the Home Assistant wiring around those flows. The only blocked part is the websocket command channel for `lockDoor` and `unLockDoor`.
+This plan started as a full API migration and remains that in structure, but the implementation boundary has moved forward again. The captured and proven parts now include the HTTP signer, login, home discovery, device discovery, online polling, lock-status polling, device-cert fetch, websocket bootstrap fetch, the cloud websocket handshake, and both live cloud-only `lockDoor` and `unLockDoor` exchanges from the native app.
 
-The repository is now in the right state for shipping the read-only and polling parts of the integration. The HA entity exposes a conservative diagnostic surface from `dataHexStr`, logs in live with a stable generated UUID, and fetches the same HTTP resources as the native app. The final remaining work after this plan is to capture websocket auth plus one lock and one unlock exchange and then implement the command channel deliberately.
+The repository is now in the right state to finish the command channel deliberately. The HA entity already exposes a conservative diagnostic surface from `dataHexStr`, logs in live with a stable generated UUID, and fetches the same HTTP resources as the native app. The remaining work after this update is implementation and validation of the websocket command path, not capture.
 
 ## Context and Orientation
 
@@ -133,13 +148,13 @@ Observed validation on 2026-04-02:
 
 Acceptance for this migration is behavioral and repository-local. The repository must contain an API client that decodes captured envelopes, signs requests with the verified formulas, and normalizes home, device, online, websocket, cert, and status data from sanitized fixtures. The config flow must store `email`, `password`, `client_uuid`, `user_id`, and `home_id` when the mocked API succeeds. The lock entity setup must create only lock devices from normalized device contexts and expose availability, lock state, battery, and raw status diagnostics from the mocked API models.
 
-Because websocket command frames are still missing from the capture, the live acceptance condition is now “real login and polling work; lock and unlock remain intentionally blocked.” The integration must fail with a precise runtime error only when lock or unlock is attempted without a websocket-frame capture.
+Because websocket command frames are now captured, the next live acceptance condition is higher: real login, polling, and lock/unlock must work from Home Assistant using the captured websocket command path. Until that code lands, the current runtime still blocks lock and unlock intentionally.
 
 ## Idempotence and Recovery
 
 All file edits in this plan are in-place code and documentation changes. They can be re-applied safely as long as the same runtime surface is preserved. The fixture files are sanitized and static, so regenerating or editing them does not affect user data. If validation fails after a partial edit, rerun the relevant command after fixing the failing file; there is no database migration or destructive cleanup step in this work.
 
-The risky operations in this task are not filesystem operations but false confidence. The HTTP signer is now verified, so keep it. Do not extend that confidence to websocket commands without the corresponding frame capture. If a future contributor captures websocket auth plus command frames, update this plan, add the new tests, and remove the remaining command blocker deliberately.
+The risky operations in this task are not filesystem operations but false confidence. The HTTP signer is verified, and the websocket command path is now captured for this lock. The remaining risk is in implementation detail: reproduce the captured websocket flow exactly, add tests around the command encoder and response handling, and only then remove the runtime command blocker.
 
 ## Artifacts and Notes
 
@@ -161,6 +176,9 @@ Key reverse-engineering evidence captured during research:
 
     live bad-signature login response:
     {"resultBodyObject":null,"error":true,"errorMessage":"sig not passed","errorCode":-1}
+
+    websocket command capture note:
+    /Users/peyton/ghq/github.com/peyton/homeassistant-anona-security/docs/2026-04-02-anona-websocket-command-capture.md
 
 ## Interfaces and Dependencies
 
