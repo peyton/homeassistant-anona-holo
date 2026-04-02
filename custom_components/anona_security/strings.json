@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anona Security",
+        "description": "Enter your Anona Security app credentials.",
+        "data": {
+          "email": "Email address",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password.",
+      "cannot_connect": "Cannot connect to Anona Security servers.",
+      "unknown": "Unexpected error. Check logs for details."
+    },
+    "abort": {
+      "already_configured": "This Anona account is already configured."
+    }
+  }
+}

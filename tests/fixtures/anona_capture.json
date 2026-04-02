@@ -1,0 +1,204 @@
+{
+  "server_ts": 1775103534323,
+  "plain_error_response": {
+    "resultBodyObject": null,
+    "error": true,
+    "errorMessage": "sig not passed",
+    "errorCode": -1
+  },
+  "signature_fixture": {
+    "ts": 1775103534323,
+    "client_uuid": "D294537B-5907-5ECB-92FB-F0C32D3CC82B73",
+    "channel": 73001001,
+    "token": "session-token",
+    "login_sig": "69b9ddae3b487a7c01c659d1bd025187",
+    "auth_sig": "85885c06c38e0f2bfa46ac349a3da386"
+  },
+  "login": {
+    "email": "user@example.com",
+    "password": "correct horse battery staple",
+    "sig": "69b9ddae3b487a7c01c659d1bd025187",
+    "response_object": {
+      "token": "session-token",
+      "waitForDelete": 0,
+      "deleteDate": null,
+      "channel": 73001001,
+      "userID": 533291,
+      "userName": "Peyton",
+      "mobileNeeded": false,
+      "confFileUrl": null,
+      "guideStatus": 0,
+      "applicationCode": null
+    }
+  },
+  "homes": {
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
+    "response_object": {
+      "userId": 533291,
+      "defaultHome": {
+        "homeId": "home-123",
+        "homeName": "Bay",
+        "defaultHome": 0,
+        "homeType": 1,
+        "homeWallpaperName": "https://assets.anonasecurity.com/anona/img_7.png",
+        "homeWallpaperType": 0,
+        "createHomeTimeStamp": 1738618925000,
+        "acceptTimeStamp": null
+      },
+      "actualHomeNameList": [
+        {
+          "homeId": "home-123",
+          "homeName": "Bay",
+          "defaultHome": 0,
+          "homeType": 1,
+          "homeWallpaperName": "https://assets.anonasecurity.com/anona/img_7.png",
+          "homeWallpaperType": 0,
+          "createHomeTimeStamp": 1738618925000,
+          "acceptTimeStamp": null
+        }
+      ],
+      "virtualSharedHomeId": "virtual-home-456",
+      "virtualSharedHomeDeviceIdList": []
+    }
+  },
+  "device_list": {
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
+    "response_object": [
+      {
+        "type": 76,
+        "module": 76001,
+        "channel": 76001001,
+        "deviceId": "device-123",
+        "deviceNickName": "Front Door Lock",
+        "bindTime": 1767882247000,
+        "lastOnlineTs": 1775089224000,
+        "createTimeStamp": 1738618989000,
+        "updateTimeStamp": 1767882247000,
+        "timezoneId": "America/Los_Angeles",
+        "softwareVersionNumber": "1.5.189",
+        "softwareSubVersion": "a",
+        "model": "SL2001",
+        "sn": "SN-LOCK-123",
+        "ip": "192.168.2.209",
+        "deviceRelations": null
+      },
+      {
+        "type": 42,
+        "module": 42001,
+        "channel": 42001001,
+        "deviceId": "device-999",
+        "deviceNickName": "Ignored Sensor",
+        "model": "SENSOR42",
+        "sn": "SN-SENSOR-999"
+      }
+    ]
+  },
+  "online_status": {
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
+    "response_object": {
+      "online": true,
+      "createTs": 1775103001462,
+      "lastAliveTs": null
+    }
+  },
+  "device_status": {
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
+    "response_object": {
+      "startType": 48,
+      "deviceType": 76,
+      "deviceModule": 76001,
+      "deviceChannel": 76001001,
+      "deviceId": "device-123",
+      "refreshTs": 1775103452000,
+      "dataHexStr": "080110011a040a0208642001280030003a100a0010001a040a02080020002a00320040004800520208025a05080110b4016202080068007204080010017a0208018001008a01020802"
+    }
+  },
+  "device_certs": {
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
+    "response_object": {
+      "deviceId": "device-123",
+      "deviceCerts": "-----BEGIN CERTIFICATE-----\nDEVICE CERT\n-----END CERTIFICATE-----",
+      "userCerts": "-----BEGIN CERTIFICATE-----\nUSER CERT\n-----END CERTIFICATE-----",
+      "userCertsPriKey": "-----BEGIN EC PRIVATE KEY-----\nPRIVATE KEY\n-----END EC PRIVATE KEY-----"
+    }
+  },
+  "websocket": {
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
+    "response_object": {
+      "websocketAddress": "wss://websocketforappv2.anonasecurity.com:10006/websocket",
+      "websocketToken": "ws-session-token",
+      "websocketAesKey": "1005206B0BE3E571D03228AB2034AA5A",
+      "appToken": null
+    }
+  },
+  "websocket_commands": {
+    "captured_secure_frames": {
+      "lock_ack": "651A30CFC80788174800D4368DADC5DB33768539DBBE752B97BA83CDC8D2658D242F273BC6D75E2E0AF811242CB66C0A8F2E2C349815C6BD0C941E4AE051A4512DBEFBAC1F010A379640B544CE0708408BED8686",
+      "unlock_ack": "651A30CFC80788174800D4368DADC5DB33768539DBBE752B97BA83CDC8D2658D242F273BC6D75E2E0AF811242CB66C0A37D8533465B7D59DAAF2807F7496DBC4F92C05B281A0FD2C8F7CEC374E14B62A6F050484",
+      "lock_push": "8E69C785049F3B895BFB6E4193C07C63C519F787993FE4BEBEE9B2BB658380DAEB3C9EF9D5A19931E8B1BD640C1A1CB2B4A9FAF10A3804E53E4F7603997DF2CFE53E18458E77004037BF144DA69E743EB4DC597E28102A6E4DC7E2800149B9FA70D7E140F38171D9A78E4EFCB2FE288535C9CD69561A151D9D3418C89067FE469A5757B4D8DC4F88C350829717B3B67C52CD9DA47F1D1E8484DD74CB18C934691434790129E4BE1FCAD2D4F617CFB8D56D97B301C58479C2916FF08B5BB4E017C2A3F372A89DA5A050253EE304F1AE982235FA8ABADEB506408FAE46E19CD28193E533F1EF2C75ABC944BBF35FA6FC0F21080506D8731562EBE3D03528D3EC52BF0B382BD2C159CE99CBE7007F388906C3BD44788077987FE5056D1A6C123BFE6D29E106D40515950C6B59E86E5ADC369A8772CB786FB8A81C904C5AF88CB5653C61CD80"
+    },
+    "handshake": {
+      "token": "ws-session-token",
+      "operate_id": "1775128161513",
+      "ts": 1775128161513,
+      "ack": {
+        "ackCode": 200,
+        "isAck": true,
+        "operateId": "1775128161513",
+        "ts": 1775128161607
+      }
+    },
+    "lock": {
+      "send_id": 7,
+      "operate_id": "1775128212237501",
+      "ts": 1775128212237,
+      "content": "083010079203062A0408ABC620",
+      "ack": {
+        "ackCode": 200,
+        "isAck": true,
+        "operateId": "1775128212237501",
+        "ts": 1775128212343
+      },
+      "result": {
+        "content": "083010079203043A020800",
+        "deviceId": "device-123",
+        "operateId": "1775128212237501",
+        "source": 2,
+        "ts": 1775128214733
+      },
+      "push": {
+        "content": "080110011A040A0208642001280030003A100A0010001A040A02080020002A00320040004800520208025A05080110B4016202080068007204080010017A0208018001008A01020802",
+        "deviceId": "device-123",
+        "operateId": "14d858ec-ce64-44b9-b242-cd29c3f4d8af",
+        "source": 2,
+        "ts": 1775128215789
+      }
+    },
+    "unlock": {
+      "send_id": 6,
+      "operate_id": "1775128251753870",
+      "ts": 1775128251753,
+      "content": "083010069203062A0408ABC620",
+      "ack": {
+        "ackCode": 200,
+        "isAck": true,
+        "operateId": "1775128251753870",
+        "ts": 1775128251865
+      },
+      "result": {
+        "content": "083010069203043A020800",
+        "deviceId": "device-123",
+        "operateId": "1775128251753870",
+        "source": 2,
+        "ts": 1775128253905
+      },
+      "push": {
+        "content": "083010069203043A020800",
+        "deviceId": "device-123",
+        "operateId": "387313cc-a9f5-48e4-ab67-4d1c2ea1fa28",
+        "source": 2,
+        "ts": 1775128255010
+      }
+    }
+  }
+}

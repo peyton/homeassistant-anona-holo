@@ -1,17 +1,23 @@
-# artifacts
-__pycache__
-.pytest*
-*.egg-info
-*/build/*
-*/dist/*
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+.pyright/
 
-
-# misc
+# Tooling and local artifacts
 .coverage
-.vscode
+.coverage.*
+.DS_Store
+.vscode/
 coverage.xml
-.ruff_cache
+tmp/
 
+# Build outputs
+build/
+dist/
 
 # Home Assistant configuration
 config/*

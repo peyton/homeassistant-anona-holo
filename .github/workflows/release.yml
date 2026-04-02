@@ -1,26 +1,21 @@
-name: CI
+name: Release
 
 on:
   push:
-    branches:
-      - "master"
-      - "main"
-  pull_request:
-    branches:
-      - "master"
-      - "main"
+    tags:
+      - "v*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  quality:
-    name: Quality checks
-    runs-on: "ubuntu-latest"
+  release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -36,8 +31,10 @@ jobs:
       - name: Install project dependencies
         run: scripts/setup
 
-      - name: Ruff
-        run: scripts/lint
+      - name: Run release checks
+        run: scripts/check
 
-      - name: Tests
-        run: scripts/test
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" --generate-notes --verify-tag

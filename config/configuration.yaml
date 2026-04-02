@@ -1,12 +1,22 @@
 # https://www.home-assistant.io/integrations/default_config/
-default_config:
+frontend:
+history:
+logbook:
+map:
+sun:
+system_health:
 
 # https://www.home-assistant.io/integrations/homeassistant/
 homeassistant:
-  debug: true
+    debug: true
+
+http:
+    use_x_forwarded_for: true
+    trusted_proxies:
+        - FC00::/7
 
 # https://www.home-assistant.io/integrations/logger/
 logger:
-  default: info
-  logs:
-    custom_components.integration_blueprint: debug
+    default: info
+    logs:
+        custom_components.anona_security: debug

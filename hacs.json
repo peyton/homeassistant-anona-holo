@@ -1,5 +1,6 @@
 {
-    "name": "Integration blueprint",
-    "homeassistant": "2026.3.2",
-    "hacs": "2.0.5"
+  "name": "Anona Security",
+  "homeassistant": "2026.3.4",
+  "hacs": "2.0.5",
+  "render_readme": true
 }

@@ -1,46 +1,57 @@
-# Notice
+# Anona Security
 
-The component and platforms in this repository are not meant to be used by a
-user, but as a "blueprint" that custom component developers can build
-upon, to make more awesome stuff.
+Home Assistant custom integration for Anona smart locks.
 
-HAVE FUN! 😎
+## HACS
 
-## Why?
+This integration is structured for HACS distribution:
 
-This is simple, by having custom_components look (README + structure) the same
-it is easier for developers to help each other and for users to start using them.
+1. Add this repository to HACS as a custom integration repository, or install it directly once the repository is published in HACS.
+2. Install `Anona Security`.
+3. Restart Home Assistant.
+4. Add the integration from `Settings -> Devices & services`.
+5. Sign in with the same email address and password you use in the Anona app.
 
-If you are a developer and you want to add things to this "blueprint" that you think more
-developers will have use for, please open a PR to add it :)
+Minimum tested Home Assistant version: `2026.3.4`
 
-## What?
+## Status
 
-This repository contains multiple files, here is a overview:
+This repository now matches the Anona mobile app API shape that was captured and verified live:
 
-File | Purpose | Documentation
--- | -- | --
-`.devcontainer.json` | Used for development/testing with Visual Studio Code. | [Documentation](https://code.visualstudio.com/docs/remote/containers)
-`.github/ISSUE_TEMPLATE/*.yml` | Templates for the issue tracker | [Documentation](https://help.github.com/en/github/building-a-strong-community/configuring-issue-templates-for-your-repository)
-`custom_components/integration_blueprint/*` | Integration files, this is where everything happens. | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)
-`CONTRIBUTING.md` | Guidelines on how to contribute. | [Documentation](https://help.github.com/en/github/building-a-strong-community/setting-guidelines-for-repository-contributors)
-`LICENSE` | The license file for the project. | [Documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/licensing-a-repository)
-`README.md` | The file you are reading now, should contain info about the integration, installation and configuration instructions. | [Documentation](https://help.github.com/en/github/writing-on-github/basic-writing-and-formatting-syntax)
-`requirements.txt` | Python packages used for development/lint/testing this integration. | [Documentation](https://pip.pypa.io/en/stable/user_guide/#requirements-files)
+- base64 response envelopes with `resultBodyObject`, `error`, and `errorCode`
+- server-time bootstrap via `/baseServiceApi/V2/getTs`
+- verified request signing for login and authenticated HTTP calls
+- normalized home and device discovery
+- online state from `/anona/device/api/getDeviceOnlineStatus`
+- lock state and battery parsing from `dataHexStr`
+- websocket bootstrap via `getDeviceCertsForOwner` and `getWebsocketAddress`
 
-## How?
+The repository also includes the reconstructed websocket command helpers from the native app capture:
 
-1. Create a new repository in GitHub, using this repository as a template by clicking the "Use this template" button in the GitHub UI.
-1. Open your new repository in Visual Studio Code devcontainer (Preferably with the "`Dev Containers: Clone Repository in Named Container Volume...`" option).
-1. Rename all instances of the `integration_blueprint` to `custom_components/<your_integration_domain>` (e.g. `custom_components/awesome_integration`).
-1. Rename all instances of the `Integration Blueprint` to `<Your Integration Name>` (e.g. `Awesome Integration`).
-1. Run the `scripts/develop` to start HA and test out your new integration.
+- plaintext websocket handshake using the session token from `getWebsocketAddress`
+- AES-CBC websocket frame encryption/decryption with the app's trailing little-endian CRC32
+- websocket command JSON using the mobile-client `deviceType = 73` and `target = 2`
+- protobuf command packing for `sendID = 7` (`lockDoor`) and `sendID = 6` (`unLockDoor`)
+- same-`operateId` ack/result parsing through Home Assistant lock service calls
 
-## Next steps
+Live command validation:
 
-These are some next steps you may want to look into:
-- Add tests to your integration, [`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) can help you get started.
-- Add brand images (logo/icon).
-- Create your first release.
-- Share your integration on the [Home Assistant Forum](https://community.home-assistant.io/).
-- Submit your integration to [HACS](https://hacs.xyz/docs/publish/start).
+1. On April 2, 2026, repo-local live validation against production successfully issued a real `unlock` followed by a real `lock`, ending `Front Door Lock` back in the locked state.
+2. On April 2, 2026, a local Home Assistant `2026.3.4` container loaded the mounted integration and completed a real `lock.unlock` then `lock.lock` round trip for `Front Door Lock`.
+
+## Development
+
+From a clean checkout:
+
+```bash
+scripts/setup
+scripts/lint
+scripts/test
+```
+
+## Repository Notes
+
+- Runtime code lives in `custom_components/anona_security`.
+- Fixture-backed tests live in `tests/`.
+- The migration exec plan is in [`docs/execplans/2026-04-01-align-anona-security-with-captured-api.md`](docs/execplans/2026-04-01-align-anona-security-with-captured-api.md).
+- The websocket command capture note is in [`docs/2026-04-02-anona-websocket-command-capture.md`](docs/2026-04-02-anona-websocket-command-capture.md).
