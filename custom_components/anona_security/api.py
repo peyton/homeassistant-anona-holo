@@ -9,6 +9,7 @@ import hashlib
 import json
 import logging
 import time
+import zlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
@@ -51,6 +52,7 @@ PROTOBUF_VARINT_MASK = 0x7F
 AES_BLOCK_SIZE_BITS = 128
 AES_BLOCK_SIZE_BYTES = 16
 WEBSOCKET_AES_KEY_LENGTH = 16
+WEBSOCKET_FRAME_CRC_SIZE_BYTES = 4
 
 type DecodedProtoValue = int | dict[str, DecodedProtoValue] | list[DecodedProtoValue]
 
@@ -487,28 +489,12 @@ class AnonaApi:
         )
 
     async def lock(self, device: DeviceContext | str) -> None:
-        """Lock a device once the websocket command flow is fully verified."""
-        del device
-        raise AnonaUnsupportedCommandError(
-            "Lock/unlock are not yet live-compatible from Home Assistant. "
-            "A local Home Assistant container validated the mounted integration's "
-            "discovery, online-status, and lock-status paths successfully on "
-            "April 2, 2026, but the production websocket still closes immediately "
-            "after the handshake when Home Assistant sends the reconstructed "
-            "command frame."
-        )
+        """Lock a device through the captured websocket command flow."""
+        await self._execute_websocket_command(device, send_id=COMMAND_ID_LOCK)
 
     async def unlock(self, device: DeviceContext | str) -> None:
-        """Unlock a device once the websocket command flow is fully verified."""
-        del device
-        raise AnonaUnsupportedCommandError(
-            "Lock/unlock are not yet live-compatible from Home Assistant. "
-            "A local Home Assistant container validated the mounted integration's "
-            "discovery, online-status, and lock-status paths successfully on "
-            "April 2, 2026, but the production websocket still closes immediately "
-            "after the handshake when Home Assistant sends the reconstructed "
-            "command frame."
-        )
+        """Unlock a device through the captured websocket command flow."""
+        await self._execute_websocket_command(device, send_id=COMMAND_ID_UNLOCK)
 
     async def _execute_websocket_command(
         self,
@@ -858,7 +844,8 @@ def build_websocket_command_payload(
     return {
         "content": content,
         "deviceId": device.device_id,
-        "deviceType": device.device_type,
+        # The websocket transport identifies the mobile client, not the lock family.
+        "deviceType": APP_DEVICE_TYPE,
         "operateId": operate_id,
         "target": target,
         "ts": ts,
@@ -874,30 +861,29 @@ def encrypt_websocket_payload(
     payload: Mapping[str, Any],
     websocket_aes_key: str,
 ) -> str:
-    """AES-CBC encrypt a websocket payload and encode it as uppercase hex."""
+    """AES-CBC encrypt a websocket payload and add the app's CRC32 suffix."""
     key = _decode_websocket_aes_key(websocket_aes_key)
     padder = PKCS7(AES_BLOCK_SIZE_BITS).padder()
     plaintext = serialize_websocket_payload(payload).encode()
     padded = padder.update(plaintext) + padder.finalize()
     encryptor = Cipher(algorithms.AES(key), modes.CBC(_websocket_aes_iv())).encryptor()
     ciphertext = encryptor.update(padded) + encryptor.finalize()
-    return ciphertext.hex().upper()
+    secure_frame = _append_websocket_crc(ciphertext)
+    return secure_frame.hex().upper()
 
 
 def decrypt_websocket_payload(
     ciphertext_hex: str,
     websocket_aes_key: str,
 ) -> dict[str, Any]:
-    """AES-CBC decrypt a websocket payload encoded as hexadecimal text."""
+    """Decrypt a CRC32-suffixed websocket payload encoded as hexadecimal text."""
     key = _decode_websocket_aes_key(websocket_aes_key)
     try:
-        ciphertext = bytes.fromhex(ciphertext_hex)
+        secure_frame = bytes.fromhex(ciphertext_hex)
     except ValueError as err:
         message = "Websocket payload was not valid hexadecimal"
         raise AnonaApiError(message) from err
-    if len(ciphertext) % AES_BLOCK_SIZE_BYTES != 0:
-        message = "Encrypted websocket payload length was invalid"
-        raise AnonaApiError(message)
+    ciphertext = _strip_websocket_crc(secure_frame)
     decryptor = Cipher(algorithms.AES(key), modes.CBC(_websocket_aes_iv())).decryptor()
     padded = decryptor.update(ciphertext) + decryptor.finalize()
     unpadder = PKCS7(AES_BLOCK_SIZE_BITS).unpadder()
@@ -1266,3 +1252,29 @@ def _decode_websocket_aes_key(websocket_aes_key: str) -> bytes:
 def _websocket_aes_iv() -> bytes:
     """Return the fixed IV used by the captured websocket protocol."""
     return bytes(range(16))
+
+
+def _append_websocket_crc(ciphertext: bytes) -> bytes:
+    """Append the app's little-endian CRC32 suffix to an AES ciphertext."""
+    crc32 = zlib.crc32(ciphertext) & 0xFFFFFFFF
+    return ciphertext + crc32.to_bytes(WEBSOCKET_FRAME_CRC_SIZE_BYTES, "little")
+
+
+def _strip_websocket_crc(secure_frame: bytes) -> bytes:
+    """Validate and remove the CRC32 suffix from a secure websocket frame."""
+    if len(secure_frame) <= WEBSOCKET_FRAME_CRC_SIZE_BYTES:
+        message = "Encrypted websocket payload was too short"
+        raise AnonaApiError(message)
+    ciphertext = secure_frame[:-WEBSOCKET_FRAME_CRC_SIZE_BYTES]
+    if len(ciphertext) % AES_BLOCK_SIZE_BYTES != 0:
+        message = "Encrypted websocket payload length was invalid"
+        raise AnonaApiError(message)
+    expected_crc = zlib.crc32(ciphertext) & 0xFFFFFFFF
+    actual_crc = int.from_bytes(
+        secure_frame[-WEBSOCKET_FRAME_CRC_SIZE_BYTES:],
+        "little",
+    )
+    if actual_crc != expected_crc:
+        message = "Encrypted websocket payload CRC32 suffix was invalid"
+        raise AnonaApiError(message)
+    return ciphertext

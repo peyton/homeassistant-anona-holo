@@ -7,19 +7,21 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self, cast
 
-import pytest
+from aiohttp import WSMsgType
 
+import custom_components.anona_security.api as api_module
 from custom_components.anona_security.api import (
     AnonaApi,
-    AnonaUnsupportedCommandError,
     WebsocketMessage,
     build_authenticated_signature,
     build_command_content,
     build_login_signature,
+    build_websocket_command_payload,
     decode_response_envelope,
     decode_websocket_message,
     encrypt_websocket_payload,
@@ -37,7 +39,7 @@ from custom_components.anona_security.const import (
 )
 
 if TYPE_CHECKING:
-    from aiohttp import WSMessage
+    import pytest
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "anona_capture.json"
 FIXTURE = json.loads(FIXTURE_PATH.read_text())
@@ -97,7 +99,7 @@ class _FakeSession:
 class _FakeWebsocket:
     """Minimal websocket object that records sent frames and replays responses."""
 
-    def __init__(self, messages: list[WSMessage]) -> None:
+    def __init__(self, messages: list[Any]) -> None:
         """Initialize the fake websocket with a message queue."""
         self._messages = messages
         self.sent: list[str] = []
@@ -119,13 +121,26 @@ class _FakeWebsocket:
         """Record an outbound websocket text frame."""
         self.sent.append(data)
 
-    async def receive(self) -> WSMessage:
+    async def receive(self) -> Any:
         """Return the next canned websocket message."""
         return self._messages.pop(0)
 
     def exception(self) -> None:
         """Match aiohttp's websocket error access API."""
         return
+
+
+@dataclass(slots=True)
+class _FakeWsMessage:
+    """Minimal websocket frame shape used by the websocket command tests."""
+
+    type: WSMsgType
+    data: Any
+
+
+def _ws_text(payload: str) -> _FakeWsMessage:
+    """Create a text websocket frame for the fake websocket."""
+    return _FakeWsMessage(type=WSMsgType.TEXT, data=payload)
 
 
 def _encode_success(result_body_object: Any) -> str:
@@ -400,8 +415,24 @@ def test_build_command_content_matches_the_captured_lock_and_unlock_payloads() -
     )
 
 
-def test_decode_websocket_message_handles_plain_and_encrypted_frames() -> None:
-    """Websocket decoding should support plaintext handshake acks and AES frames."""
+def test_build_websocket_command_payload_uses_app_device_type() -> None:
+    """Websocket command JSON should identify the mobile client as deviceType 73."""
+    device = normalize_device_context(FIXTURE["device_list"]["response_object"][0])
+
+    payload = build_websocket_command_payload(
+        device=device,
+        content=FIXTURE["websocket_commands"]["lock"]["content"],
+        operate_id=FIXTURE["websocket_commands"]["lock"]["operate_id"],
+        ts=FIXTURE["websocket_commands"]["lock"]["ts"],
+        target=2,
+    )
+
+    assert payload["deviceId"] == "device-123"
+    assert payload["deviceType"] == APP_DEVICE_TYPE
+
+
+def test_decode_websocket_message_handles_plain_and_secure_frames() -> None:
+    """Websocket decoding should support plaintext acks and CRC32-suffixed frames."""
     handshake_ack = json.dumps(FIXTURE["websocket_commands"]["handshake"]["ack"])
     encrypted_result = encrypt_websocket_payload(
         FIXTURE["websocket_commands"]["lock"]["result"],
@@ -434,16 +465,113 @@ def test_decode_websocket_message_handles_plain_and_encrypted_frames() -> None:
     assert decoded_result.is_ack is False
 
 
-def test_lock_and_unlock_are_blocked_until_live_websocket_parity_is_verified() -> None:
-    """Public lock control should fail fast with a clear live-validation blocker."""
-    api, session = _make_api([], authed=True)
+def test_captured_secure_frames_end_with_little_endian_crc32() -> None:
+    """Captured app frames should carry a CRC32 suffix after the ciphertext."""
+    for payload_hex in FIXTURE["websocket_commands"]["captured_secure_frames"].values():
+        secure_frame = bytes.fromhex(payload_hex)
+        ciphertext = secure_frame[:-4]
+        expected_crc = zlib.crc32(ciphertext) & 0xFFFFFFFF
+
+        assert len(ciphertext) % 16 == 0
+        assert secure_frame[-4:] == expected_crc.to_bytes(4, "little")
+
+
+def test_lock_and_unlock_send_live_compatible_websocket_frames(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Public lock control should send the verified websocket command flow."""
+    time_values = iter(
+            [
+                FIXTURE["websocket_commands"]["handshake"]["ts"] * 1_000_000,
+                int(FIXTURE["websocket_commands"]["lock"]["operate_id"]) * 1_000,
+                FIXTURE["websocket_commands"]["handshake"]["ts"] * 1_000_000,
+                int(FIXTURE["websocket_commands"]["unlock"]["operate_id"]) * 1_000,
+            ]
+        )
+    monkeypatch.setattr(api_module.time, "time_ns", lambda: next(time_values))
+    websocket_lock = _FakeWebsocket(
+        [
+            _ws_text(json.dumps(FIXTURE["websocket_commands"]["handshake"]["ack"])),
+            _ws_text(
+                encrypt_websocket_payload(
+                    FIXTURE["websocket_commands"]["lock"]["ack"],
+                    FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+                )
+            ),
+            _ws_text(
+                encrypt_websocket_payload(
+                    FIXTURE["websocket_commands"]["lock"]["result"],
+                    FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+                )
+            ),
+        ]
+    )
+    websocket_unlock = _FakeWebsocket(
+        [
+            _ws_text(json.dumps(FIXTURE["websocket_commands"]["handshake"]["ack"])),
+            _ws_text(
+                encrypt_websocket_payload(
+                    FIXTURE["websocket_commands"]["unlock"]["ack"],
+                    FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+                )
+            ),
+            _ws_text(
+                encrypt_websocket_payload(
+                    FIXTURE["websocket_commands"]["unlock"]["result"],
+                    FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+                )
+            ),
+        ]
+    )
+    api, session = _make_api(
+        [
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(FIXTURE["device_certs"]["response_object"])),
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(FIXTURE["websocket"]["response_object"])),
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(FIXTURE["device_certs"]["response_object"])),
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(FIXTURE["websocket"]["response_object"])),
+        ],
+        authed=True,
+        websockets=[websocket_lock, websocket_unlock],
+    )
     device = normalize_device_context(FIXTURE["device_list"]["response_object"][0])
 
-    for command in (api.lock, api.unlock):
-        with pytest.raises(
-            AnonaUnsupportedCommandError,
-            match="not yet live-compatible",
-        ):
-            asyncio.run(command(device))
+    asyncio.run(api.lock(device))
+    asyncio.run(api.unlock(device))
 
-    assert session.websocket_requests == []
+    assert len(session.websocket_requests) == 2
+    assert json.loads(websocket_lock.sent[0]) == {
+        "operateId": FIXTURE["websocket_commands"]["handshake"]["operate_id"],
+        "ts": FIXTURE["websocket_commands"]["handshake"]["ts"],
+        "handshakeToken": FIXTURE["websocket_commands"]["handshake"]["token"],
+    }
+    assert json.loads(websocket_unlock.sent[0]) == {
+        "operateId": FIXTURE["websocket_commands"]["handshake"]["operate_id"],
+        "ts": FIXTURE["websocket_commands"]["handshake"]["ts"],
+        "handshakeToken": FIXTURE["websocket_commands"]["handshake"]["token"],
+    }
+    assert decode_websocket_message(
+        websocket_lock.sent[1],
+        websocket_aes_key=FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+    ).raw == {
+        "content": FIXTURE["websocket_commands"]["lock"]["content"],
+        "deviceId": "device-123",
+        "deviceType": APP_DEVICE_TYPE,
+        "operateId": FIXTURE["websocket_commands"]["lock"]["operate_id"],
+        "target": 2,
+        "ts": FIXTURE["websocket_commands"]["lock"]["ts"],
+    }
+    assert decode_websocket_message(
+        websocket_unlock.sent[1],
+        websocket_aes_key=FIXTURE["websocket"]["response_object"]["websocketAesKey"],
+    ).raw == {
+        "content": FIXTURE["websocket_commands"]["unlock"]["content"],
+        "deviceId": "device-123",
+        "deviceType": APP_DEVICE_TYPE,
+        "operateId": FIXTURE["websocket_commands"]["unlock"]["operate_id"],
+        "target": 2,
+        "ts": FIXTURE["websocket_commands"]["unlock"]["ts"],
+    }

@@ -8,7 +8,7 @@ This repository follows [AGENTS.md](/Users/peyton/ghq/github.com/peyton/homeassi
 
 After this change, `custom_components/anona_security` matches the captured Anona cloud API shape instead of the earlier placeholder implementation. The integration code understands the base64 envelope, the home and device models, the explicit lock device context, the online-status endpoint, and the `dataHexStr` status payload. The observable proof is that the repository contains a migrated API client, updated Home Assistant wiring, focused fixture-backed tests, and passing local validation.
 
-The HTTP signer is now solved and verified live against the production API. Home Assistant can log in, discover homes and devices, poll online state, fetch lock status, and bootstrap websocket prerequisites without relying on the app bundle. A local Home Assistant `2026.3.4` container probed the mounted component against production on 2026-04-02 and successfully fetched homes, devices, online state, and lock status. That same container also proved the reconstructed websocket command path is still incomplete in production: after a successful plaintext handshake, the production websocket closes immediately when Home Assistant sends the reconstructed encrypted command frame. Public `lock` and `unlock` therefore remain intentionally blocked until the missing native command conversion/auth step is recovered.
+The HTTP signer is now solved and verified live against the production API. Home Assistant can log in, discover homes and devices, poll online state, fetch lock status, and bootstrap websocket prerequisites without relying on the app bundle. A local Home Assistant `2026.3.4` container probed the mounted component against production on 2026-04-02 and successfully fetched homes, devices, online state, and lock status. Later the same day, repo-local live validation recovered the missing websocket transport details: encrypted frames require a trailing little-endian CRC32 over the ciphertext, and outbound command JSON must use the mobile-client `deviceType = 73` with `target = 2`. With those fixes in place, real `unlock` and `lock` commands succeeded against production and returned `Front Door Lock` to the locked state.
 
 ## Progress
 
@@ -34,6 +34,8 @@ The HTTP signer is now solved and verified live against the production API. Home
 - [x] (2026-04-02 11:32Z) Re-ran `ruff`, `uvx pyright --pythonpath ./.venv/bin/python`, and `pytest`; all checks passed with the expanded websocket command suite.
 - [x] (2026-04-02 12:18Z) Probed the mounted component from a local Home Assistant `2026.3.4` container with the custom component mounted into `/config/custom_components`; home discovery, device discovery, online polling, and lock-status polling all succeeded against production with a live session token.
 - [x] (2026-04-02 12:26Z) Verified from that same container that the production websocket still closes immediately after the plaintext handshake when Home Assistant sends the reconstructed encrypted command frame; re-gated public `lock`/`unlock`, updated tests, and corrected the docs to reflect the real runtime boundary.
+- [x] (2026-04-02 18:27Z) Reversed the remaining native websocket transport details from the captured frames and live probes: encrypted command/result frames are `ciphertext || crc32(ciphertext)` with the CRC32 encoded as little-endian bytes, and accepted outbound command JSON must use `deviceType = 73` with `target = 2`.
+- [x] (2026-04-02 18:39Z) Re-enabled public `lock` / `unlock`, updated the websocket tests to cover the CRC32 suffix and app-device-type behavior, and live-validated a real `unlock` followed by a real `lock` against production, ending `Front Door Lock` back in the locked state.
 
 ## Surprises & Discoveries
 
@@ -64,8 +66,11 @@ The HTTP signer is now solved and verified live against the production API. Home
 - Observation: The encrypted websocket frames use AES-CBC with a fixed IV of `00 01 02 ... 0F` and standard PKCS#7 padding.
   Evidence: decrypting the command-result and push frames with the session key from `getWebsocketAddress` succeeded only under AES-CBC with a constant IV of `000102030405060708090A0B0C0D0E0F`, and the resulting plaintext JSON matched the app’s parsed websocket entities.
 
-- Observation: Reproducing the captured websocket frame format is not sufficient for live command delivery from Home Assistant.
-  Evidence: on 2026-04-02, a local Home Assistant `2026.3.4` container successfully completed the plaintext websocket handshake against production, but every reconstructed command variant tested from Home Assistant and repo-local probes caused an immediate websocket close before any command ack/result arrived.
+- Observation: The encrypted websocket frame format includes a trailing CRC32 over the AES ciphertext.
+  Evidence: the captured ack frames are 84 bytes and the captured push frames are 324 bytes, which is `4 + N*16` rather than a raw AES block multiple. Stripping the final 4 bytes produced valid AES-CBC ciphertext, and those 4 bytes matched `zlib.crc32(ciphertext).to_bytes(4, "little")` for every captured frame tested.
+
+- Observation: The websocket command JSON must identify the mobile client as `deviceType = 73`, not the lock family or module.
+  Evidence: repo-local live probes on 2026-04-02 returned `ackCode = 10000` for `deviceType` values `76`, `76001`, and `76001001`, but returned `ackCode = 200` for `deviceType = 73` when `target = 2`. After switching the integration to `deviceType = 73`, live `lock` and `unlock` commands completed successfully.
 
 - Observation: The H5 signer surface is owned by `PubBaseWebController`, while the proxy request and response models are native Swift types in the same module.
   Evidence: `xcrun otool -ov .../Anona | sed -n '142244,142430p;178247,178340p;183322,183350p'` shows `_TtC11PublicUIKit20PubBaseWebController` with ivars `deviceType`, `deviceModule`, `channel`, `deviceId`, `messageHandlers`, and `jsBridge`, plus `_TtC11PublicUIKit12PubH5Request.data` and `_TtC11PublicUIKit18PubH5ProxyResponse.{error,errorCode,resultBodyObject}`. `strings -a .../Anona | rg 'requestSign|performHttpRequest|checkRegisterHandler|PubBaseWebController.swift|PubDataNetwork\\+H5.swift'` places those bridge commands and both source paths in the same binary.
@@ -91,6 +96,10 @@ The HTTP signer is now solved and verified live against the production API. Home
   Rationale: fixture-backed protocol reconstruction is not enough if production still rejects the command frame. The correct runtime behavior is an explicit blocker that preserves working login, discovery, online, and status polling while documenting the remaining native websocket gap.
   Date/Author: 2026-04-02 / Codex
 
+- Decision: Remove the public websocket command blocker after recovering the CRC32 frame suffix and mobile-client `deviceType = 73`.
+  Rationale: the remaining live rejection was no longer speculative after the probe work. Production now accepts the reconstructed command flow, and repo-local live validation proved both `unlock` and `lock` end to end for this lock family.
+  Date/Author: 2026-04-02 / Codex
+
 - Decision: Treat the websocket capture prerequisite as satisfied and keep the next scope focused on implementation, not more reverse engineering.
   Rationale: the repo now has a live cloud-only websocket capture with the bootstrap handshake, command payload hex, ack shape, and parsed remote status pushes for both `lockDoor` and `unLockDoor`. More capture work is lower leverage than implementing and validating that command path.
   Date/Author: 2026-04-02 / Codex
@@ -101,15 +110,15 @@ The HTTP signer is now solved and verified live against the production API. Home
 
 ## Outcomes & Retrospective
 
-This plan started as a full API migration and remains that in structure. The captured and proven runtime surface now includes the HTTP signer, login, home discovery, device discovery, online polling, lock-status polling, device-cert fetch, websocket bootstrap fetch, the cloud websocket handshake, and the AES-CBC websocket framing helpers reconstructed from the native app.
+This plan started as a full API migration and remains that in structure. The captured and proven runtime surface now includes the HTTP signer, login, home discovery, device discovery, online polling, lock-status polling, device-cert fetch, websocket bootstrap fetch, the cloud websocket handshake, the AES-CBC websocket framing helpers, the trailing CRC32 frame suffix, and the accepted websocket command JSON semantics for this lock family.
 
-The repository is now in a coherent partial-parity state for lock devices. The HA entity exposes a conservative diagnostic surface from `dataHexStr`, logs in live with a stable generated UUID, and fetches the same HTTP resources as the native app. The missing piece is still the native websocket command conversion/auth layer: live Home Assistant validation showed that reproducing the captured encrypted frame family is not enough for accepted lock/unlock delivery. The remaining work after this update is more reverse engineering of the native websocket send path, not more HTTP migration.
+The repository is now in a coherent live-command state for lock devices. The HA entity exposes a conservative diagnostic surface from `dataHexStr`, logs in live with a stable generated UUID, fetches the same HTTP resources as the native app, and now sends production-accepted websocket `lock` / `unlock` commands. The remaining work after this update is narrower: broader model coverage and a fresh full Home Assistant service-call validation pass, not more fundamental reverse engineering of the native websocket send path.
 
 ## Context and Orientation
 
 The integration code lives in `custom_components/anona_security`. The important modules are `api.py`, which contains the cloud client and response parsing, `config_flow.py`, which drives Home Assistant setup from email and password, `__init__.py`, which logs in and stores the API client in `hass.data`, `lock.py`, which creates lock entities from the API client, and `const.py`, which contains the shared constants.
 
-The current runtime is the migrated implementation described above. It now decodes the captured response envelopes, signs requests locally with the verified formulas, parses `dataHexStr`, and keeps reconstructed websocket helpers in-tree for continued protocol work. Public `lock` and `unlock` currently raise an explicit blocker instead of sending guessed-or-partial websocket frames. The test surface under `tests/` is likewise updated to the `anona_security` package and still covers the websocket command helpers and decoding logic in addition to the earlier HTTP fixtures.
+The current runtime is the migrated implementation described above. It now decodes the captured response envelopes, signs requests locally with the verified formulas, parses `dataHexStr`, and sends live-compatible websocket command frames with the recovered CRC32 suffix and `deviceType = 73` transport identity. The test surface under `tests/` is likewise updated to the `anona_security` package and covers the websocket command helpers, CRC32 suffix handling, and public `lock` / `unlock` flows in addition to the earlier HTTP fixtures.
 
 The captured HTTP archive is `/Users/peyton/Desktop/us-api.anonasecurity.com_04-01-2026-21-25-18.har`. It shows that successful API responses are base64-encoded JSON envelopes. The login endpoint is `/accountApi/V3/userLoginPwd`; the API bootstrap endpoint is `/baseServiceApi/V2/getTs`; the home list endpoint is `/AnonaHomeApi/getAnonaHomeNameList`; the device list endpoint is `/anona/device/api/getDeviceListByHomeId`; the device online endpoint is `/anona/device/api/getDeviceOnlineStatus`; the lock status endpoint is `/anona/device/status/api/getAnonaDeviceStatus`; the device-cert and websocket-address endpoints are `/anona/device/api/getDeviceCertsForOwner` and `/anonaWebsocketApi/getWebsocketAddress`.
 
@@ -123,9 +132,9 @@ Next, rewrite `custom_components/anona_security/api.py` around three responsibil
 
 Then, update `custom_components/anona_security/config_flow.py` so it validates with the new API shape and persists `client_uuid`, `user_id`, and `home_id`. Because login no longer yields a home ID directly, the flow must call the home-list endpoint after login and select the default home or the first returned home. Generic upstream failures should surface as normal config-flow errors.
 
-After that, update `custom_components/anona_security/__init__.py` and `custom_components/anona_security/lock.py`. Setup must create the API client with the stored `client_uuid`, re-login on setup, refresh the stored `user_id` and `home_id` when newer values are discovered, and load only the `lock` platform. The lock platform must work from normalized `DeviceContext` objects, filter devices to `type == 76`, derive availability from the online endpoint, derive lock state and battery from the decoded `dataHexStr`, and preserve raw diagnostic fields as extra attributes. The websocket command helpers should remain available for ongoing protocol work, but public `lock` and `unlock` must stay explicitly blocked until the missing native conversion/auth step is understood.
+After that, update `custom_components/anona_security/__init__.py` and `custom_components/anona_security/lock.py`. Setup must create the API client with the stored `client_uuid`, re-login on setup, refresh the stored `user_id` and `home_id` when newer values are discovered, and load only the `lock` platform. The lock platform must work from normalized `DeviceContext` objects, filter devices to `type == 76`, derive availability from the online endpoint, derive lock state and battery from the decoded `dataHexStr`, and preserve raw diagnostic fields as extra attributes. The websocket command helpers should send the production-compatible `deviceType = 73` command JSON, append the CRC32 suffix to encrypted frames, and expose public `lock` and `unlock` once live validation succeeds.
 
-Finally, replace the stale tests and update the README. The test surface must cover the sanitized response fixtures, the password hash helper, the verified login and authenticated signature helpers, status decoding, websocket protobuf packing and AES frame decoding, config flow entry data, and lock entity behavior. The README must stop describing a template integration and instead document the real API migration, the local development commands, and the current live-validation boundary, including the public lock/unlock blocker.
+Finally, replace the stale tests and update the README. The test surface must cover the sanitized response fixtures, the password hash helper, the verified login and authenticated signature helpers, status decoding, websocket protobuf packing and AES frame decoding, CRC32 suffix validation, config flow entry data, and lock entity behavior. The README must stop describing a template integration and instead document the real API migration, the local development commands, and the current live-validation boundary, including the recovered websocket command details.
 
 ## Concrete Steps
 
@@ -163,16 +172,16 @@ Observed validation on 2026-04-02:
 
 Acceptance for this migration is behavioral and repository-local. The repository must contain an API client that decodes captured envelopes, signs requests with the verified formulas, normalizes home, device, online, websocket, cert, and status data from sanitized fixtures, and reproduces the captured websocket framing helpers under test. The config flow must store `email`, `password`, `client_uuid`, `user_id`, and `home_id` when the mocked API succeeds. The lock entity setup must create only lock devices from normalized device contexts and expose availability, lock state, battery, and raw status diagnostics from the mocked API models.
 
-The latest live acceptance results are split:
+The latest live acceptance results are:
 
 - satisfied on 2026-04-02 from a local Home Assistant `2026.3.4` container: home discovery, device discovery, online polling, and lock-status polling against production with a live session token
-- not yet satisfied: production acceptance of Home Assistant lock/unlock websocket commands
+- satisfied on 2026-04-02 from repo-local live validation: production acceptance of websocket `unlock` and `lock` commands after adding the CRC32 suffix and `deviceType = 73` transport identity
 
 ## Idempotence and Recovery
 
 All file edits in this plan are in-place code and documentation changes. They can be re-applied safely as long as the same runtime surface is preserved. The fixture files are sanitized and static, so regenerating or editing them does not affect user data. If validation fails after a partial edit, rerun the relevant command after fixing the failing file; there is no database migration or destructive cleanup step in this work.
 
-The risky operations in this task are not filesystem operations but false confidence. The HTTP signer is verified, and the websocket command path is partly reconstructed for this lock family, but live Home Assistant validation showed that the native send path still contains a missing detail. The current recovery path is to keep the blocker explicit, preserve the working HTTP-backed features, and continue reverse engineering the native websocket send/auth conversion rather than shipping a command path known to fail in production.
+The risky operations in this task are not filesystem operations but false confidence. The HTTP signer and the websocket command path are now both verified for this lock family, but the repo still only has live command proof for `Front Door Lock` and does not yet have a second full Home Assistant service-call validation pass after the final websocket fixes. The recovery path is now ordinary verification rather than more protocol archaeology: if future live checks fail, re-run the repo-local websocket probe first, then the Home Assistant container validation, before assuming the wire format changed again.
 
 ## Artifacts and Notes
 
@@ -218,4 +227,4 @@ The module must also expose pure helpers for envelope decoding, password hashing
 
 `custom_components/anona_security/config_flow.py` must create entries with at least `email`, `password`, `client_uuid`, `user_id`, and `home_id` in `data`. `custom_components/anona_security/lock.py` must use normalized `DeviceContext`, `OnlineStatus`, and `LockStatus` objects instead of raw JSON dicts. The integration depends only on `aiohttp` and Home Assistant’s built-in helpers for the code delivered in this plan.
 
-Change note: 2026-04-02. Updated this ExecPlan after live Home Assistant container validation proved the HTTP migration works but the reconstructed websocket command path still fails in production, so public lock/unlock were re-gated while the native websocket send path remains under investigation.
+Change note: 2026-04-02. Updated this ExecPlan after recovering the CRC32 websocket frame suffix and the accepted `deviceType = 73` command identity, then re-enabling public `lock` / `unlock` after live production validation.

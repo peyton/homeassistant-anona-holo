@@ -19,14 +19,15 @@ The integration supports live login, home discovery, device discovery, online po
 The repository also includes the reconstructed websocket command helpers from the native app capture:
 
 - plaintext websocket handshake using the session token from `getWebsocketAddress`
-- AES-CBC websocket frame encryption/decryption helpers
+- AES-CBC websocket frame encryption/decryption with the app's trailing little-endian CRC32
+- websocket command JSON using the mobile-client `deviceType = 73` and `target = 2`
 - protobuf command packing for `sendID = 7` (`lockDoor`) and `sendID = 6` (`unLockDoor`)
 - same-`operateId` ack/result parsing
 
-Current boundary:
+Live command validation:
 
-1. `lock` and `unlock` are intentionally blocked in the public API because live Home Assistant validation showed the production websocket closes immediately after the handshake when Home Assistant sends the reconstructed command frame.
-2. The remaining gap is the native app's missing websocket command conversion/auth step, not the HTTP API.
+1. On April 2, 2026, repo-local live validation against production recovered the missing websocket transport details and successfully issued a real `unlock` followed by a real `lock`, ending `Front Door Lock` back in the locked state.
+2. The earlier local Home Assistant `2026.3.4` container probe still only covered discovery, online polling, and status polling. Re-running a full Home Assistant service-call round trip is still useful, but `lock` and `unlock` are no longer protocol-blocked in the integration.
 
 ## Development
 

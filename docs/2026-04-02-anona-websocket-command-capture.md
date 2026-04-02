@@ -120,7 +120,21 @@ door_lock {
   - a follow-up command result on the same `operateId` with `lockDoor ---Optional("{}")` or `unLockDoor ---Optional("{}")`
   - a remote push carrying updated lock status in a parsed `DoorLockSmartPacket`
 
-## Remaining uncertainty
+## Recovered transport details
+
+Further reverse engineering on 2026-04-02 recovered the missing production details that were not obvious from the first command reconstruction:
+
+- The encrypted websocket frame format is not bare AES-CBC hex. It is:
+  - `ciphertext || crc32(ciphertext)` where the CRC32 is appended as 4 little-endian bytes
+  - proof: the captured ack and push frames only decrypted cleanly after stripping the last 4 bytes, and those 4 bytes matched `zlib.crc32(ciphertext).to_bytes(4, "little")`
+- The websocket command JSON must identify the mobile app client, not the lock family:
+  - accepted command probes used `deviceType = 73` and `target = 2`
+  - rejected probes using the lock-family values `76`, `76001`, or `76001001` all returned `ackCode = 10000`
+- After adding those two details, repo-local live validation against production succeeded for both directions:
+  - a real `lock` command on an already-locked device returned success
+  - a real `unlock` immediately followed by a real `lock` succeeded, with status polling confirming the device returned to `locked = true`
+
+## Historical uncertainty
 
 - This capture proves the cloud command transport and gives the exact lock/unlock payload hex for one lock model, but it does not yet explain how the app derives those protobuf bytes.
 - The only explicit `authSync` in the observed session was BLE-specific. If the Home Assistant command implementation can reuse the websocket bootstrap plus the captured command packets, this note is enough to proceed. If per-device websocket auth still exists elsewhere, it was not emitted in this cloud-only run.
