@@ -14,17 +14,19 @@ This repository now matches the captured HTTP API shape from the Anona mobile ap
 - lock state and battery parsing from `dataHexStr`
 - websocket bootstrap via `getDeviceCertsForOwner` and `getWebsocketAddress`
 
-The integration now supports live login, home discovery, device discovery, online polling, and status polling against the production API.
-The repository now also includes the captured websocket command path for lock and unlock:
+The integration supports live login, home discovery, device discovery, online polling, and status polling against the production API. On April 2, 2026, the mounted component was also probed from a local Home Assistant `2026.3.4` container and successfully fetched homes, devices, online state, and lock status from production.
+
+The repository also includes the reconstructed websocket command helpers from the native app capture:
 
 - plaintext websocket handshake using the session token from `getWebsocketAddress`
-- AES-CBC encrypted websocket command frames
+- AES-CBC websocket frame encryption/decryption helpers
 - protobuf command packing for `sendID = 7` (`lockDoor`) and `sendID = 6` (`unLockDoor`)
-- same-`operateId` command completion handling
+- same-`operateId` ack/result parsing
 
 Current boundary:
 
-1. The websocket command implementation is fixture-backed and protocol-grounded, but it still needs a fresh end-to-end validation run from a live Home Assistant instance.
+1. `lock` and `unlock` are intentionally blocked in the public API because live Home Assistant validation showed the production websocket closes immediately after the handshake when Home Assistant sends the reconstructed command frame.
+2. The remaining gap is the native app's missing websocket command conversion/auth step, not the HTTP API.
 
 ## Development
 

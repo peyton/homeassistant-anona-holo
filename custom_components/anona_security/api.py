@@ -487,12 +487,28 @@ class AnonaApi:
         )
 
     async def lock(self, device: DeviceContext | str) -> None:
-        """Lock a device through the captured websocket command flow."""
-        await self._execute_websocket_command(device, send_id=COMMAND_ID_LOCK)
+        """Lock a device once the websocket command flow is fully verified."""
+        del device
+        raise AnonaUnsupportedCommandError(
+            "Lock/unlock are not yet live-compatible from Home Assistant. "
+            "A local Home Assistant container validated the mounted integration's "
+            "discovery, online-status, and lock-status paths successfully on "
+            "April 2, 2026, but the production websocket still closes immediately "
+            "after the handshake when Home Assistant sends the reconstructed "
+            "command frame."
+        )
 
     async def unlock(self, device: DeviceContext | str) -> None:
-        """Unlock a device through the captured websocket command flow."""
-        await self._execute_websocket_command(device, send_id=COMMAND_ID_UNLOCK)
+        """Unlock a device once the websocket command flow is fully verified."""
+        del device
+        raise AnonaUnsupportedCommandError(
+            "Lock/unlock are not yet live-compatible from Home Assistant. "
+            "A local Home Assistant container validated the mounted integration's "
+            "discovery, online-status, and lock-status paths successfully on "
+            "April 2, 2026, but the production websocket still closes immediately "
+            "after the handshake when Home Assistant sends the reconstructed "
+            "command frame."
+        )
 
     async def _execute_websocket_command(
         self,
