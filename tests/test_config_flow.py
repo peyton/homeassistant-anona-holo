@@ -14,8 +14,8 @@ import pytest
 from homeassistant.data_entry_flow import AbortFlow
 
 from custom_components.anona_security.api import (
+    AnonaApiError,
     AnonaAuthError,
-    AnonaSignatureError,
     HomeContext,
     LoginContext,
 )
@@ -65,14 +65,12 @@ class _InvalidAuthApi:
         self.home_id = None
 
 
-class _SignatureUnavailableApi:
-    """Test double for a missing request signer."""
+class _GenericApiErrorApi:
+    """Test double for a non-auth API failure."""
 
     def __init__(self) -> None:
         """Initialize the fake API."""
-        self.login = AsyncMock(
-            side_effect=AnonaSignatureError("request signing blocked")
-        )
+        self.login = AsyncMock(side_effect=AnonaApiError("unexpected upstream error"))
         self.get_homes = AsyncMock()
         self.home_id = None
 
@@ -196,11 +194,11 @@ def test_user_step_reports_invalid_auth(monkeypatch: pytest.MonkeyPatch) -> None
     assert result["errors"] == {"base": "invalid_auth"}
 
 
-def test_user_step_reports_signature_blocker(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A missing signer should surface a dedicated config-flow error."""
+def test_user_step_reports_generic_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A non-auth API failure should surface the generic config-flow error."""
     flow = _make_flow()
     flow_any = cast("Any", flow)
-    api = _SignatureUnavailableApi()
+    api = _GenericApiErrorApi()
     show_form = Mock(
         side_effect=lambda *, step_id, data_schema, errors: {
             "type": "form",
@@ -237,7 +235,7 @@ def test_user_step_reports_signature_blocker(monkeypatch: pytest.MonkeyPatch) ->
         ),
     )
 
-    assert result["errors"] == {"base": "signature_unavailable"}
+    assert result["errors"] == {"base": "unknown"}
 
 
 def test_user_step_aborts_when_email_is_already_configured() -> None:

@@ -8,7 +8,7 @@ This repository follows [AGENTS.md](/Users/peyton/ghq/github.com/peyton/homeassi
 
 After this change, `custom_components/anona_security` matches the captured Anona cloud API shape instead of the earlier placeholder implementation. The integration code understands the base64 envelope, the home and device models, the explicit lock device context, the online-status endpoint, and the `dataHexStr` status payload. The observable proof is that the repository contains a migrated API client, updated Home Assistant wiring, focused fixture-backed tests, and passing local validation.
 
-There is one material blocker to a fully working live integration: the app does not derive `sig` directly from request fields. The native request path reads signature values from a keyed cache and migrates them through an internal `requestSign` flow that is not fully reversed from the provided HAR. This plan therefore delivers the structural migration and isolates signing and command execution behind explicit errors rather than pretending they are solved.
+The HTTP signer is now solved and verified live against the production API. Home Assistant can log in, discover homes and devices, poll online state, fetch lock status, and bootstrap websocket prerequisites without relying on the app bundle. The remaining blocker is narrower: lock and unlock still require a websocket-frame capture that includes `authSync`, `lockDoor`, and `unLockDoor` so the command channel can be implemented safely.
 
 ## Progress
 
@@ -24,6 +24,9 @@ There is one material blocker to a fully working live integration: the app does 
 - [x] (2026-04-02 00:20Z) Ran `ruff`, `pytest`, and `pyright` successfully from the repo toolchain; all checks passed after fixing the final typing and entity metadata issues.
 - [x] (2026-04-02 07:58Z) Tightened the `dataHexStr` mapping with conservative battery, door-state, and long-endurance diagnostics derived from the app’s native lock-status vocabulary, then re-ran `ruff`, `pytest`, and `pyright`.
 - [x] (2026-04-02 07:58Z) Narrowed the unresolved H5 signer ownership to `PubBaseWebController` plus the native `PubH5Request` and `PubH5ProxyResponse` models compiled alongside `PubDataNetwork+H5.swift`.
+- [x] (2026-04-02 10:14Z) Verified live that login succeeds with `deviceToken=""` and a random UUID, and that every required authenticated HTTP endpoint accepts `sig = md5(token + uuid + channel + ts + salt)`.
+- [x] (2026-04-02 10:33Z) Replaced the temporary signer blocker with the verified login and authenticated signature helpers, fixed `getTs` to POST `{}`, updated the config flow and docs, and rewrote the tests to assert the real signer behavior.
+- [x] (2026-04-02 10:44Z) Re-ran repo-local validation after the live-signer patch set: `ruff` passed, `uvx pyright --pythonpath ./.venv/bin/python` passed with 0 errors, and `pytest` passed with 18 tests green.
 
 ## Surprises & Discoveries
 
@@ -33,11 +36,11 @@ There is one material blocker to a fully working live integration: the app does 
 - Observation: The API wraps successful responses in base64-encoded JSON but may return plain JSON for signature failures.
   Evidence: the HAR responses decode from base64 into objects with `resultBodyObject`, `error`, and `errorCode`; a live bad-signature login request returned plain JSON `{"resultBodyObject":null,"error":true,"errorMessage":"sig not passed","errorCode":-1}`.
 
-- Observation: Password hashing is solved, but request signing is not a plain hash of request fields.
-  Evidence: the `PubRequestEntity.swift` disassembly around `0x100e32764` appends the literal salt `329he3wihfeibfk3209(&*^%dehsi3)*&`, calls `com_md5String`, and lowercases the result. Separate disassembly around `0x100c56624` shows `sig` retrieval via `PubKeychainManager` lookups rather than direct hashing.
+- Observation: Request signing is a direct MD5 over stable field concatenations; the earlier keychain interpretation was incomplete.
+  Evidence: live requests now succeed with `login sig = md5(deviceType + email + "null" + passWordMd5 + ts + salt)` and `authenticated sig = md5(token + uuid + channel + ts + salt)`. The same authenticated formula validated live for `getAllUserInfo`, `getAnonaHomeNameList`, `getDeviceListByHomeId`, `getDeviceOnlineStatus`, `getAnonaDeviceStatus`, `getWebsocketAddress`, and `getDeviceCertsForOwner`.
 
-- Observation: The generic signature helper is a keychain-backed cache with a migration path from `"{ts}_{token}"` to `md5("{ts}_{uuid.lower()}_{channel}")`.
-  Evidence: the helper at `0x100c56624` builds `"{ts}_{uuid.lower()}_{channel}"`, MD5-hashes it, calls `PubKeychainManager.getValueForKeychain(forKey:)`, and if that misses, looks up `"{ts}_{token}"`, stores the returned value under the MD5 key, and removes the temporary key.
+- Observation: `getTs` requires a `POST` with an empty JSON object rather than a bodyless `POST` or a `GET`.
+  Evidence: live probes on 2026-04-02 returned `405 Method Not Allowed` for `GET /baseServiceApi/V2/getTs` and for a bodyless `POST`, while `POST {}` returned `200` with an integer `resultBodyObject`.
 
 - Observation: The HAR does not include websocket frames, so live lock and unlock traffic still cannot be reproduced safely.
   Evidence: the HAR entries include HTTP requests for `getDeviceCertsForOwner` and `getWebsocketAddress`, but there are no captured websocket frame payloads to reconstruct `authSync`, `lockDoor`, or `unLockDoor`.
@@ -50,9 +53,9 @@ There is one material blocker to a fully working live integration: the app does 
 
 ## Decision Log
 
-- Decision: Implement the API migration even though the request signer is still unresolved, and isolate that gap behind a dedicated signature error.
-  Rationale: the user explicitly asked to implement the migration plan. The captured contract is still valuable for the API client, Home Assistant wiring, parsing, tests, and docs, but it would be misleading to ship a guessed signer.
-  Date/Author: 2026-04-01 / Codex
+- Decision: Replace the temporary signer blocker with the verified local signer and keep only websocket lock control gated.
+  Rationale: the signer formula is now proven live. Leaving the HTTP path behind a blocker would be less correct than implementing the verified contract, while websocket command payloads still lack the necessary evidence.
+  Date/Author: 2026-04-02 / Codex
 
 - Decision: Sanitize test fixtures instead of copying raw HAR bodies with the user’s email, token, device identifiers, or certificates.
   Rationale: the repo should capture shapes and semantics, not sensitive account data.
@@ -68,9 +71,9 @@ There is one material blocker to a fully working live integration: the app does 
 
 ## Outcomes & Retrospective
 
-This plan started as a full API migration and remains that in structure, but the implementation is now intentionally split into “captured and proven” versus “still blocked.” The captured parts are the request and response envelope, the device and home models, the lock status transport, the password hashing rule, and the Home Assistant entity wiring. The blocked parts are live signature generation and websocket command frames.
+This plan started as a full API migration and remains that in structure, but the implementation boundary has moved forward. The captured and proven parts now include the HTTP signer, login, home discovery, device discovery, online polling, lock-status polling, device-cert fetch, websocket bootstrap fetch, and the Home Assistant wiring around those flows. The only blocked part is the websocket command channel for `lockDoor` and `unLockDoor`.
 
-The repository is now in that better state: it models the observed API, documents the remaining unknowns, and narrows the unresolved pieces to the signer producer and websocket command frames. The HA entity now exposes a slightly richer, still conservative diagnostic surface from `dataHexStr` without overclaiming protobuf semantics. The final remaining work after this plan is to capture and reverse the signer producer path and then to capture websocket auth plus one lock and one unlock exchange.
+The repository is now in the right state for shipping the read-only and polling parts of the integration. The HA entity exposes a conservative diagnostic surface from `dataHexStr`, logs in live with a stable generated UUID, and fetches the same HTTP resources as the native app. The final remaining work after this plan is to capture websocket auth plus one lock and one unlock exchange and then implement the command channel deliberately.
 
 ## Context and Orientation
 
@@ -86,13 +89,13 @@ A “config entry” is Home Assistant’s stored integration record. A “devic
 
 First, replace `custom_components/anona_security/const.py` with constants that match the captured API. The new constants must include the request channel and device type, the lock device identifiers, the base URL and endpoint paths, the password-sign salt, config-entry keys for `email`, `password`, `client_uuid`, `user_id`, and `home_id`, and a fixed scan interval for polling.
 
-Next, rewrite `custom_components/anona_security/api.py` around three responsibilities: request construction, response decoding, and model normalization. The request layer must fetch server time from `getTs`, add `uuid`, `channel`, and `ts`, decode either base64 envelopes or plain JSON error payloads, and raise typed errors for auth failures, signature failures, and command-path blockers. The signature provider must be an isolated abstraction that exposes the real discovered key derivations but raises a dedicated error when asked to produce a live signature without a supplied override. The response layer must normalize homes, devices, online status, device certs, websocket address responses, and `dataHexStr` lock status into Python dataclasses with type hints.
+Next, rewrite `custom_components/anona_security/api.py` around three responsibilities: request construction, response decoding, and model normalization. The request layer must fetch server time from `getTs`, add `uuid`, `channel`, and `ts`, decode either base64 envelopes or plain JSON error payloads, and raise typed errors for auth failures, signature failures, and command-path blockers. The signature provider must compute the verified login and authenticated HTTP formulas locally so Home Assistant can log in and poll without the app bundle. The response layer must normalize homes, devices, online status, device certs, websocket address responses, and `dataHexStr` lock status into Python dataclasses with type hints.
 
-Then, update `custom_components/anona_security/config_flow.py` so it validates with the new API shape and persists `client_uuid`, `user_id`, and `home_id`. Because login no longer yields a home ID directly, the flow must call the home-list endpoint after login and select the default home or the first returned home. Add a dedicated `signature_unavailable` form error so the unresolved signer is explicit in the UI instead of surfacing as a generic exception.
+Then, update `custom_components/anona_security/config_flow.py` so it validates with the new API shape and persists `client_uuid`, `user_id`, and `home_id`. Because login no longer yields a home ID directly, the flow must call the home-list endpoint after login and select the default home or the first returned home. Generic upstream failures should surface as normal config-flow errors; only websocket command attempts remain specially blocked.
 
 After that, update `custom_components/anona_security/__init__.py` and `custom_components/anona_security/lock.py`. Setup must create the API client with the stored `client_uuid`, re-login on setup, refresh the stored `user_id` and `home_id` when newer values are discovered, and load only the `lock` platform. The lock platform must work from normalized `DeviceContext` objects, filter devices to `type == 76`, derive availability from the online endpoint, derive lock state and battery from the decoded `dataHexStr`, and preserve raw diagnostic fields as extra attributes. The `lock` and `unlock` methods must fetch cert and websocket prerequisites and then raise a clear command-path blocker until websocket frames are captured.
 
-Finally, replace the stale tests and update the README. The test surface must cover the sanitized response fixtures, the password hash helper, the signature-key derivation helpers, status decoding, config flow entry data, and lock entity behavior. The README must stop describing a template integration and instead document the real API migration, the local development commands, and the current signer and websocket prerequisites.
+Finally, replace the stale tests and update the README. The test surface must cover the sanitized response fixtures, the password hash helper, the verified login and authenticated signature helpers, status decoding, config flow entry data, and lock entity behavior. The README must stop describing a template integration and instead document the real API migration, the local development commands, and the remaining websocket-command prerequisite.
 
 ## Concrete Steps
 
@@ -128,15 +131,15 @@ Observed validation on 2026-04-02:
 
 ## Validation and Acceptance
 
-Acceptance for this migration is behavioral and repository-local. The repository must contain an API client that decodes captured envelopes and normalizes home, device, online, websocket, cert, and status data from sanitized fixtures. The config flow must store `email`, `password`, `client_uuid`, `user_id`, and `home_id` when the mocked API succeeds, and it must surface a dedicated error if the signer is unavailable. The lock entity setup must create only lock devices from normalized device contexts and expose availability, lock state, battery, and raw status diagnostics from the mocked API models.
+Acceptance for this migration is behavioral and repository-local. The repository must contain an API client that decodes captured envelopes, signs requests with the verified formulas, and normalizes home, device, online, websocket, cert, and status data from sanitized fixtures. The config flow must store `email`, `password`, `client_uuid`, `user_id`, and `home_id` when the mocked API succeeds. The lock entity setup must create only lock devices from normalized device contexts and expose availability, lock state, battery, and raw status diagnostics from the mocked API models.
 
-Because the signer producer and websocket frames are still missing from the capture, the live acceptance condition is deliberately narrower than “a real lock can be controlled today.” The integration must instead fail with a precise runtime error when a live signature is needed or when lock or unlock is attempted without a websocket-frame capture. That is the correct acceptance for the current evidence set.
+Because websocket command frames are still missing from the capture, the live acceptance condition is now “real login and polling work; lock and unlock remain intentionally blocked.” The integration must fail with a precise runtime error only when lock or unlock is attempted without a websocket-frame capture.
 
 ## Idempotence and Recovery
 
 All file edits in this plan are in-place code and documentation changes. They can be re-applied safely as long as the same runtime surface is preserved. The fixture files are sanitized and static, so regenerating or editing them does not affect user data. If validation fails after a partial edit, rerun the relevant command after fixing the failing file; there is no database migration or destructive cleanup step in this work.
 
-The risky operations in this task are not filesystem operations but false confidence. Do not replace the explicit signer blocker with a guessed algorithm just to make the code “look complete.” If a future contributor reverses the signer producer or captures websocket frames, update this plan, add the new tests, and remove the blockers deliberately.
+The risky operations in this task are not filesystem operations but false confidence. The HTTP signer is now verified, so keep it. Do not extend that confidence to websocket commands without the corresponding frame capture. If a future contributor captures websocket auth plus command frames, update this plan, add the new tests, and remove the remaining command blocker deliberately.
 
 ## Artifacts and Notes
 
@@ -175,8 +178,8 @@ At the end of this migration, `custom_components/anona_security/api.py` must def
         async def lock(self, device: DeviceContext | str) -> None: ...
         async def unlock(self, device: DeviceContext | str) -> None: ...
 
-The module must also expose pure helpers for envelope decoding, password hashing, signature-key derivation, and `dataHexStr` parsing so the tests can exercise them without network I/O.
+The module must also expose pure helpers for envelope decoding, password hashing, signature construction, and `dataHexStr` parsing so the tests can exercise them without network I/O.
 
 `custom_components/anona_security/config_flow.py` must create entries with at least `email`, `password`, `client_uuid`, `user_id`, and `home_id` in `data`. `custom_components/anona_security/lock.py` must use normalized `DeviceContext`, `OnlineStatus`, and `LockStatus` objects instead of raw JSON dicts. The integration depends only on `aiohttp` and Home Assistant’s built-in helpers for the code delivered in this plan.
 
-Change note: 2026-04-01. Created this ExecPlan from the user-supplied migration plan, updated it with the captured API evidence, and recorded the signer and websocket blockers so the implementation can proceed without pretending those gaps are solved.
+Change note: 2026-04-02. Updated this ExecPlan after live production validation proved the HTTP signer formulas, narrowed the remaining blocker to websocket command frames, and aligned the repository state with that verified boundary.

@@ -11,7 +11,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import AnonaApi, AnonaApiError, AnonaAuthError, AnonaSignatureError
+from .api import AnonaApi, AnonaApiError, AnonaAuthError
 from .const import (
     CONF_CLIENT_UUID,
     CONF_EMAIL,
@@ -52,11 +52,9 @@ class AnonaSecurityConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 login_context = await api.login(email, password)
                 homes = await api.get_homes()
-            except AnonaSignatureError:
-                errors["base"] = "signature_unavailable"
             except AnonaAuthError:
                 errors["base"] = "invalid_auth"
-            except aiohttp.ClientError, TimeoutError:
+            except (aiohttp.ClientError, TimeoutError):
                 errors["base"] = "cannot_connect"
             except AnonaApiError:
                 errors["base"] = "unknown"

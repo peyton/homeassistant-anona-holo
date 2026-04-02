@@ -8,7 +8,7 @@ from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import AnonaApi, AnonaApiError, AnonaAuthError, AnonaSignatureError
+from .api import AnonaApi, AnonaApiError, AnonaAuthError
 from .const import (
     CONF_CLIENT_UUID,
     CONF_EMAIL,
@@ -41,7 +41,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await api.get_homes()
     except AnonaAuthError as err:
         raise ConfigEntryAuthFailed(str(err)) from err
-    except (AnonaSignatureError, AnonaApiError, TimeoutError) as err:
+    except (AnonaApiError, TimeoutError) as err:
         raise ConfigEntryNotReady(str(err)) from err
 
     updated_data = dict(entry.data)

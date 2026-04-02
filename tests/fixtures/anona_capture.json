@@ -7,17 +7,17 @@
     "errorCode": -1
   },
   "signature_fixture": {
-    "ts": 1775103534237,
+    "ts": 1775103534323,
     "client_uuid": "D294537B-5907-5ECB-92FB-F0C32D3CC82B73",
     "channel": 73001001,
     "token": "session-token",
-    "lookup_key": "637b7586a24e1d1b785f53ac3d5edf1b",
-    "migration_key": "1775103534237_session-token"
+    "login_sig": "69b9ddae3b487a7c01c659d1bd025187",
+    "auth_sig": "85885c06c38e0f2bfa46ac349a3da386"
   },
   "login": {
     "email": "user@example.com",
     "password": "correct horse battery staple",
-    "sig": "fixture-login-sig",
+    "sig": "69b9ddae3b487a7c01c659d1bd025187",
     "response_object": {
       "token": "session-token",
       "waitForDelete": 0,
@@ -32,7 +32,7 @@
     }
   },
   "homes": {
-    "sig": "fixture-homes-sig",
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
     "response_object": {
       "userId": 533291,
       "defaultHome": {
@@ -62,7 +62,7 @@
     }
   },
   "device_list": {
-    "sig": "fixture-device-list-sig",
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
     "response_object": [
       {
         "type": 76,
@@ -94,7 +94,7 @@
     ]
   },
   "online_status": {
-    "sig": "fixture-online-sig",
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
     "response_object": {
       "online": true,
       "createTs": 1775103001462,
@@ -102,7 +102,7 @@
     }
   },
   "device_status": {
-    "sig": "fixture-status-sig",
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
     "response_object": {
       "startType": 48,
       "deviceType": 76,
@@ -114,7 +114,7 @@
     }
   },
   "device_certs": {
-    "sig": "fixture-certs-sig",
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
     "response_object": {
       "deviceId": "device-123",
       "deviceCerts": "-----BEGIN CERTIFICATE-----\nDEVICE CERT\n-----END CERTIFICATE-----",
@@ -123,7 +123,7 @@
     }
   },
   "websocket": {
-    "sig": "fixture-websocket-sig",
+    "sig": "85885c06c38e0f2bfa46ac349a3da386",
     "response_object": {
       "websocketAddress": "wss://websocketforappv2.anonasecurity.com:10006/websocket",
       "websocketToken": "ws-session-token",

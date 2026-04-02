@@ -13,7 +13,6 @@
     "error": {
       "invalid_auth": "Invalid email or password.",
       "cannot_connect": "Cannot connect to Anona Security servers.",
-      "signature_unavailable": "Anona request signing is not solved yet. A fresh native signer capture is still required.",
       "unknown": "Unexpected error. Check logs for details."
     },
     "abort": {

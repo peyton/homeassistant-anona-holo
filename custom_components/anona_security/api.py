@@ -165,26 +165,32 @@ class SignatureProvider(Protocol):
         ...
 
 
-class UnavailableSignatureProvider:
-    """Signature provider that documents the unresolved signer blocker."""
+class NativeSignatureProvider:
+    """Signature provider verified against the live mobile API."""
 
     async def async_get_signature(self, request: SignedRequest) -> str:
-        """Raise the current signer blocker with concrete guidance."""
-        lookup_key = build_signature_lookup_key(
-            request.ts, request.uuid, request.channel
-        )
-        migration_key = None
-        if request.token:
-            migration_key = build_signature_migration_key(request.ts, request.token)
-        raise AnonaSignatureError(
-            "Anona request signing is still blocked. The app reads signatures from "
-            f"a cache keyed by {lookup_key!r}"
-            + (
-                f" with migration fallback {migration_key!r}."
-                if migration_key is not None
-                else "."
+        """Return a signature compatible with the native mobile client."""
+        if request.endpoint == ENDPOINT_LOGIN or request.token is None:
+            email = _require_string(request.payload.get("email"), "login email")
+            password_hash = _require_string(
+                request.payload.get("passWord"),
+                "login passWord",
             )
-            + " Capture the native requestSign producer before attempting live auth."
+            device_type = (
+                _coerce_int(request.payload.get("deviceType")) or APP_DEVICE_TYPE
+            )
+            return build_login_signature(
+                email=email,
+                password_hash=password_hash,
+                ts=request.ts,
+                mobile=_coerce_string(request.payload.get("mobile")),
+                device_type=device_type,
+            )
+        return build_authenticated_signature(
+            token=request.token,
+            client_uuid=request.uuid,
+            channel=request.channel,
+            ts=request.ts,
         )
 
 
@@ -226,7 +232,7 @@ class AnonaApi:
         self._home_id = home_id
         self._token: str | None = None
         self._user_id = user_id
-        self._signature_provider = signature_provider or UnavailableSignatureProvider()
+        self._signature_provider = signature_provider or NativeSignatureProvider()
         self._devices_by_id: dict[str, DeviceContext] = {}
 
     @property
@@ -281,7 +287,7 @@ class AnonaApi:
 
     async def get_server_ts(self) -> int:
         """Fetch the server timestamp required for signed requests."""
-        result = await self._post_enveloped(ENDPOINT_GET_TS)
+        result = await self._post_enveloped(ENDPOINT_GET_TS, payload={})
         timestamp = result.get("resultBodyObject")
         timestamp_int = _coerce_int(timestamp)
         if timestamp_int is None:
@@ -531,6 +537,8 @@ class AnonaApi:
                 raise AnonaSignatureError(error_message)
             if endpoint == ENDPOINT_LOGIN:
                 raise AnonaAuthError(error_message)
+            if "token" in lowered_message:
+                raise AnonaAuthError(error_message)
             message = f"API error {error_code}: {error_message}"
             raise AnonaApiError(message)
         return envelope
@@ -552,19 +560,41 @@ class AnonaApi:
 
 def hash_password(password: str) -> str:
     """Hash a password with the app's discovered static salt."""
-    salted_password = f"{password}{PASSWORD_SIGN_SALT}".encode()
-    return hashlib.md5(salted_password, usedforsecurity=False).hexdigest()
+    return _md5_hex(f"{password}{PASSWORD_SIGN_SALT}")
 
 
-def build_signature_lookup_key(ts: int, client_uuid: str, channel: int) -> str:
-    """Return the MD5 key used by the app's signature cache."""
-    key_source = f"{ts}_{client_uuid.lower()}_{channel}".encode()
-    return hashlib.md5(key_source, usedforsecurity=False).hexdigest()
+def _md5_hex(value: str) -> str:
+    """Return the lowercase MD5 hex digest for a string value."""
+    return hashlib.md5(
+        value.encode(),
+        usedforsecurity=False,
+    ).hexdigest()
 
 
-def build_signature_migration_key(ts: int, token: str) -> str:
-    """Return the temporary migration key used by the app's signer cache."""
-    return f"{ts}_{token}"
+def build_login_signature(
+    *,
+    email: str,
+    password_hash: str,
+    ts: int,
+    mobile: str | None = None,
+    device_type: int = APP_DEVICE_TYPE,
+) -> str:
+    """Return the login signature used by the mobile app."""
+    mobile_component = mobile or "null"
+    need_sign = f"{device_type}{email}{mobile_component}{password_hash}"
+    return _md5_hex(f"{need_sign}{ts}{PASSWORD_SIGN_SALT}")
+
+
+def build_authenticated_signature(
+    *,
+    token: str,
+    client_uuid: str,
+    channel: int,
+    ts: int,
+) -> str:
+    """Return the shared authenticated-request signature."""
+    need_sign = f"{token}{client_uuid}{channel}"
+    return _md5_hex(f"{need_sign}{ts}{PASSWORD_SIGN_SALT}")
 
 
 def decode_response_envelope(text: str) -> dict[str, Any]:

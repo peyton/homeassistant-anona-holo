@@ -13,9 +13,8 @@ from typing import Any, Self, cast
 
 from custom_components.anona_security.api import (
     AnonaApi,
-    StaticSignatureProvider,
-    build_signature_lookup_key,
-    build_signature_migration_key,
+    build_authenticated_signature,
+    build_login_signature,
     decode_response_envelope,
     hash_password,
     normalize_device_context,
@@ -25,13 +24,6 @@ from custom_components.anona_security.const import (
     APP_CHANNEL,
     APP_DEVICE_TYPE,
     DEFAULT_LANG,
-    ENDPOINT_DEVICE_CERTS,
-    ENDPOINT_DEVICE_LIST,
-    ENDPOINT_DEVICE_ONLINE,
-    ENDPOINT_DEVICE_STATUS,
-    ENDPOINT_HOME_LIST,
-    ENDPOINT_LOGIN,
-    ENDPOINT_WEBSOCKET_ADDRESS,
     STATUS_SMART_TYPE,
 )
 
@@ -94,7 +86,6 @@ def _encode_success(result_body_object: Any) -> str:
 def _make_api(
     responses: list[_FakeResponse],
     *,
-    signatures: dict[str, str],
     authed: bool = False,
     home_id: str | None = None,
 ) -> tuple[AnonaApi, _FakeSession]:
@@ -104,7 +95,6 @@ def _make_api(
         cast("Any", session),
         client_uuid=FIXTURE["signature_fixture"]["client_uuid"],
         home_id=home_id,
-        signature_provider=StaticSignatureProvider(signatures),
     )
     if authed:
         api._token = FIXTURE["login"]["response_object"]["token"]
@@ -139,24 +129,27 @@ def test_hash_password_uses_the_discovered_app_salt() -> None:
     )
 
 
-def test_signature_key_helpers_match_the_captured_signer_inputs() -> None:
-    """Signature helper outputs should match the captured native key derivations."""
+def test_signature_helpers_match_the_verified_signer_inputs() -> None:
+    """Signature helpers should match the sanitized fixture inputs."""
     signature_fixture = FIXTURE["signature_fixture"]
+    password_hash = hash_password(FIXTURE["login"]["password"])
 
     assert (
-        build_signature_lookup_key(
-            signature_fixture["ts"],
-            signature_fixture["client_uuid"],
-            signature_fixture["channel"],
+        build_login_signature(
+            email=FIXTURE["login"]["email"],
+            password_hash=password_hash,
+            ts=signature_fixture["ts"],
         )
-        == signature_fixture["lookup_key"]
+        == signature_fixture["login_sig"]
     )
     assert (
-        build_signature_migration_key(
-            signature_fixture["ts"],
-            signature_fixture["token"],
+        build_authenticated_signature(
+            token=signature_fixture["token"],
+            client_uuid=signature_fixture["client_uuid"],
+            channel=signature_fixture["channel"],
+            ts=signature_fixture["ts"],
         )
-        == signature_fixture["migration_key"]
+        == signature_fixture["auth_sig"]
     )
 
 
@@ -167,7 +160,6 @@ def test_login_uses_the_captured_request_shape() -> None:
             _FakeResponse(_encode_success(FIXTURE["server_ts"])),
             _FakeResponse(_encode_success(FIXTURE["login"]["response_object"])),
         ],
-        signatures={ENDPOINT_LOGIN: FIXTURE["login"]["sig"]},
     )
 
     login_context = asyncio.run(
@@ -177,7 +169,7 @@ def test_login_uses_the_captured_request_shape() -> None:
     assert login_context.token == "session-token"
     assert login_context.user_id == "533291"
     assert session.requests[0]["url"].endswith("/baseServiceApi/V2/getTs")
-    assert "json" not in session.requests[0]
+    assert session.requests[0]["json"] == {}
     assert session.requests[1]["json"] == {
         "email": FIXTURE["login"]["email"],
         "passWord": hash_password(FIXTURE["login"]["password"]),
@@ -198,7 +190,6 @@ def test_get_homes_normalizes_the_default_home() -> None:
             _FakeResponse(_encode_success(FIXTURE["server_ts"])),
             _FakeResponse(_encode_success(FIXTURE["homes"]["response_object"])),
         ],
-        signatures={ENDPOINT_HOME_LIST: FIXTURE["homes"]["sig"]},
         authed=True,
     )
 
@@ -224,7 +215,6 @@ def test_get_devices_normalizes_device_contexts() -> None:
             _FakeResponse(_encode_success(FIXTURE["server_ts"])),
             _FakeResponse(_encode_success(FIXTURE["device_list"]["response_object"])),
         ],
-        signatures={ENDPOINT_DEVICE_LIST: FIXTURE["device_list"]["sig"]},
         authed=True,
         home_id="home-123",
     )
@@ -253,7 +243,6 @@ def test_get_device_online_status_normalizes_online_state() -> None:
             _FakeResponse(_encode_success(FIXTURE["server_ts"])),
             _FakeResponse(_encode_success(FIXTURE["online_status"]["response_object"])),
         ],
-        signatures={ENDPOINT_DEVICE_ONLINE: FIXTURE["online_status"]["sig"]},
         authed=True,
     )
 
@@ -289,7 +278,6 @@ def test_get_device_status_uses_explicit_device_context() -> None:
             _FakeResponse(_encode_success(FIXTURE["server_ts"])),
             _FakeResponse(_encode_success(FIXTURE["device_status"]["response_object"])),
         ],
-        signatures={ENDPOINT_DEVICE_STATUS: FIXTURE["device_status"]["sig"]},
         authed=True,
     )
     device = normalize_device_context(FIXTURE["device_list"]["response_object"][0])
@@ -320,10 +308,6 @@ def test_get_device_certs_and_websocket_context_normalize_payloads() -> None:
             _FakeResponse(_encode_success(FIXTURE["server_ts"])),
             _FakeResponse(_encode_success(FIXTURE["websocket"]["response_object"])),
         ],
-        signatures={
-            ENDPOINT_DEVICE_CERTS: FIXTURE["device_certs"]["sig"],
-            ENDPOINT_WEBSOCKET_ADDRESS: FIXTURE["websocket"]["sig"],
-        },
         authed=True,
     )
 
