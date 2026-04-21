@@ -40,6 +40,39 @@ check:
     just typecheck
     just test
 
+release-check version:
+    python -m scripts.release_workflow validate-version --version "{{version}}"
+    if [[ "$(git rev-parse --abbrev-ref HEAD)" != "master" ]]; then \
+        echo "Releases must be cut from the master branch." >&2; \
+        exit 1; \
+    fi
+    if [[ -n "$(git status --porcelain)" ]]; then \
+        echo "Working tree must be clean before cutting a release." >&2; \
+        exit 1; \
+    fi
+    git fetch origin master --tags
+    if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/master)" ]]; then \
+        echo "Local master must match origin/master before cutting a release." >&2; \
+        exit 1; \
+    fi
+    if git rev-parse -q --verify "refs/tags/v{{version}}" >/dev/null; then \
+        echo "Tag v{{version}} already exists locally." >&2; \
+        exit 1; \
+    fi
+    if git ls-remote --exit-code --tags origin "refs/tags/v{{version}}" >/dev/null 2>&1; then \
+        echo "Tag v{{version}} already exists on origin." >&2; \
+        exit 1; \
+    fi
+
+release-tag version:
+    just release-check "{{version}}"
+    just check
+    python -m scripts.release_workflow set-manifest-version --version "{{version}}"
+    git add custom_components/anona_holo/manifest.json
+    git commit -m "chore(release): v{{version}}"
+    git tag -a "v{{version}}" -m "v{{version}}"
+    git push origin master "v{{version}}"
+
 develop:
     if [[ ! -x "${PWD}/.venv/bin/hass" ]]; then \
         echo "Missing virtual environment. Run 'mise bootstrap' first." >&2; \
