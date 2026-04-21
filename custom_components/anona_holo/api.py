@@ -397,6 +397,23 @@ class AnonaApi:
         self._devices_by_id.update({device.device_id: device for device in devices})
         return devices
 
+    async def get_all_devices(self) -> list[DeviceContext]:
+        """Return devices from all homes visible to the authenticated user."""
+        homes = await self.get_homes()
+        all_devices: list[DeviceContext] = []
+        for home in homes:
+            devices = await self.get_devices(home.home_id)
+            all_devices.extend(devices)
+
+        unique_devices: list[DeviceContext] = []
+        seen_device_ids: set[str] = set()
+        for device in all_devices:
+            if device.device_id in seen_device_ids:
+                continue
+            unique_devices.append(device)
+            seen_device_ids.add(device.device_id)
+        return unique_devices
+
     async def get_device_info(self, device_id: str) -> DeviceContext:
         """Fetch a single device payload and normalize it."""
         result = await self._post_signed(ENDPOINT_DEVICE_INFO, {"deviceId": device_id})

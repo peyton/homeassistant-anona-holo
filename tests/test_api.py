@@ -310,6 +310,168 @@ def test_get_devices_normalizes_device_contexts() -> None:
     }
 
 
+def test_get_all_devices_aggregates_devices_across_homes() -> None:
+    """Device discovery should include every household and avoid duplicate IDs."""
+    shared_home_payload = {
+        "homeId": "home-999",
+        "homeName": "Shared Home",
+        "defaultHome": 0,
+        "homeType": 1,
+        "homeWallpaperName": "https://assets.anonasecurity.com/cover.png",
+        "homeWallpaperType": 0,
+        "createHomeTimeStamp": 1738618925000,
+        "acceptTimeStamp": None,
+    }
+    homes_response = {
+        "userId": 533291,
+        "defaultHome": {
+            "homeId": "home-123",
+            "homeName": "Bay",
+            "defaultHome": 0,
+            "homeType": 1,
+            "homeWallpaperName": "https://assets.anonasecurity.com/anona/img_7.png",
+            "homeWallpaperType": 0,
+            "createHomeTimeStamp": 1738618925000,
+            "acceptTimeStamp": None,
+        },
+        "actualHomeNameList": [
+            {
+                "homeId": "home-123",
+                "homeName": "Bay",
+                "defaultHome": 0,
+                "homeType": 1,
+                "homeWallpaperName": "https://assets.anonasecurity.com/anona/img_7.png",
+                "homeWallpaperType": 0,
+                "createHomeTimeStamp": 1738618925000,
+                "acceptTimeStamp": None,
+            },
+            shared_home_payload,
+        ],
+        "virtualSharedHomeId": "virtual-home-456",
+        "virtualSharedHomeDeviceIdList": [],
+    }
+    shared_device_list = {
+        "sig": FIXTURE["device_list"]["sig"],
+        "response_object": [
+            {
+                "type": 76,
+                "module": 76001,
+                "channel": 76001001,
+                "deviceId": "shared-device-001",
+                "deviceNickName": "Shared Home Lock",
+                "sn": "SHARED-LOCK",
+                "model": "SL2001",
+            },
+        ],
+    }
+
+    api, session = _make_api(
+        [
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(homes_response)),
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success([])),
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(shared_device_list["response_object"])),
+        ],
+        authed=True,
+    )
+
+    devices = asyncio.run(api.get_all_devices())
+
+    assert [device.device_id for device in devices] == ["shared-device-001"]
+    assert [
+        request["json"]["homeId"]
+        for request in session.requests
+        if request["url"].endswith("/anona/device/api/getDeviceListByHomeId")
+    ] == ["home-123", "home-999"]
+
+
+def test_integration_discovery_includes_shared_devices_for_member_style_flow() -> None:
+    """A login-to-homes-to-all-devices flow should expose shared-home devices."""
+    homes_payload = {
+        "userId": 533291,
+        "defaultHome": {
+            "homeId": "home-123",
+            "homeName": "ha.anona's Home",
+            "defaultHome": 0,
+            "homeType": 1,
+            "homeWallpaperName": "https://assets.anonasecurity.com/anona/img_7.png",
+            "homeWallpaperType": 0,
+            "createHomeTimeStamp": 1738618925000,
+            "acceptTimeStamp": None,
+        },
+        "actualHomeNameList": [
+            {
+                "homeId": "home-123",
+                "homeName": "ha.anona's Home",
+                "defaultHome": 0,
+                "homeType": 1,
+                "homeWallpaperName": "https://assets.anonasecurity.com/anona/img_7.png",
+                "homeWallpaperType": 0,
+                "createHomeTimeStamp": 1738618925000,
+                "acceptTimeStamp": None,
+            },
+            {
+                "homeId": "home-999",
+                "homeName": "Bay",
+                "defaultHome": 0,
+                "homeType": 1,
+                "homeWallpaperName": "https://assets.anonasecurity.com/anona/img_7.png",
+                "homeWallpaperType": 0,
+                "createHomeTimeStamp": 1738618925000,
+                "acceptTimeStamp": None,
+            },
+        ],
+        "virtualSharedHomeId": "virtual-home-456",
+        "virtualSharedHomeDeviceIdList": [],
+    }
+    shared_device = {
+        "type": 76,
+        "module": 76001,
+        "channel": 76001001,
+        "deviceId": "shared-device-001",
+        "deviceNickName": "Shared Home Lock",
+        "sn": "SHARED-LOCK",
+        "model": "SL2001",
+    }
+
+    api, session = _make_api(
+        [
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(FIXTURE["login"]["response_object"])),
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(homes_payload)),
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(homes_payload)),
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success([])),
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success([shared_device])),
+        ],
+        home_id="home-123",
+    )
+
+    login_context = asyncio.run(
+        api.login(FIXTURE["login"]["email"], FIXTURE["login"]["password"])
+    )
+    asyncio.run(api.get_homes())
+    devices = asyncio.run(api.get_all_devices())
+
+    assert login_context.user_id == "533291"
+    assert [device.device_id for device in devices] == ["shared-device-001"]
+    assert (
+        len(
+            [
+                req
+                for req in session.requests
+                if req["url"].endswith("/AnonaHomeApi/getAnonaHomeNameList")
+            ]
+        )
+        == 2
+    )
+
+
 def test_get_device_online_status_normalizes_online_state() -> None:
     """Online-state polling should map the captured online payload."""
     api, _ = _make_api(
