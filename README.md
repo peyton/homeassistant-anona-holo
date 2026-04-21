@@ -61,6 +61,8 @@ just test
 
 For local Home Assistant development, run `just develop`. It will create an ignored `config/` directory with a default `configuration.yaml` on first run and preserve any existing local changes under that directory.
 
+Codex worktrees also bootstrap through [`.codex/environments/environment.toml`](.codex/environments/environment.toml). The default environment runs `./scripts/codex setup` and exposes `develop` and `check` actions backed by the same repo-local wrapper. That wrapper ignores the user-global `mise` config so a fresh Codex worktree only installs and runs this repository's pinned toolchain.
+
 ## Repository Notes
 
 - Runtime code lives in `custom_components/anona_holo`.

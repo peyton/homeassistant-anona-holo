@@ -15,6 +15,12 @@ __pycache__/
 coverage.xml
 tmp/
 
+# Codex
+.codex/*
+!.codex/environments/
+.codex/environments/*
+!.codex/environments/environment.toml
+
 # Build outputs
 build/
 dist/
