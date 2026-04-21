@@ -8,7 +8,7 @@ ruff = "0.15.9"
 act = "0.2.87"
 actionlint = "1.7.12"
 ghalint = "1.5.5"
-gh = "2.89.0"
+gh = "2.90.0"
 
 [settings]
 experimental = true
