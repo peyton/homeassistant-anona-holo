@@ -63,6 +63,35 @@ For local Home Assistant development, run `just develop`. It will create an igno
 
 Codex worktrees also bootstrap through [`.codex/environments/environment.toml`](.codex/environments/environment.toml). The default environment runs `./scripts/codex setup` and exposes `develop` and `check` actions backed by the same repo-local wrapper. That wrapper ignores the user-global `mise` config so a fresh Codex worktree only installs and runs this repository's pinned toolchain.
 
+## Release
+
+This repository uses stable CalVer for releases:
+
+- Manifest version format: `YYYY.M.P` (for example `2026.4.0`)
+- Git tag format: `vYYYY.M.P` (for example `v2026.4.0`)
+- Release invariant: `custom_components/anona_holo/manifest.json` version must exactly match the tag version.
+
+Choose the next release version by keeping the current year/month and incrementing patch manually:
+
+- First release in a month: `YYYY.M.0`
+- Next release in that month: `YYYY.M.1`, `YYYY.M.2`, ...
+
+Cut a release with one command:
+
+```bash
+just release-tag 2026.4.0
+```
+
+`just release-tag` performs `release-check` guardrails, runs `just check`, updates the manifest version, creates commit `chore(release): v<version>`, creates an annotated tag, and pushes both commit and tag.
+
+After pushing, monitor and verify the GitHub `Release` workflow:
+
+```bash
+gh run list --workflow Release --limit 5
+gh run watch <run-id>
+gh release view v2026.4.0
+```
+
 ## Repository Notes
 
 - Runtime code lives in `custom_components/anona_holo`.

@@ -38,6 +38,9 @@ jobs:
       - name: Run release checks
         run: just check
 
+      - name: Validate release tag matches manifest version
+        run: python -m scripts.release_workflow validate-tag-manifest --tag "${GITHUB_REF_NAME}"
+
       - name: Skip GitHub release creation under act
         if: ${{ env.ACT }}
         run: echo "Skipping GitHub release creation while running under act."
