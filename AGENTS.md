@@ -14,8 +14,9 @@ GitHub repo settings or Renovate — do not bypass them:
   (`sha_pinning_required` is on).
 - **Allowlist.** New actions must be added to the repo's Actions allowlist
   (`gh api /repos/peyton/homeassistant-anona-holo/actions/permissions/selected-actions`).
-  Current allowlist: `actions/*` (GitHub-owned), `home-assistant/actions/*`,
-  `hacs/action`, `jdx/mise-action`.
+  Current allowlist: `actions/*` (GitHub-owned), `home-assistant/*`, `hacs/*`,
+  `jdx/*`. Owner-level wildcards are used because GitHub's allowlist matching
+  doesn't handle subpath patterns like `home-assistant/actions/hassfest`.
 - **Minimal permissions.** Every job must declare `permissions:` explicitly.
   Default to `contents: read`; escalate only the job that needs it.
 - **Checkout hygiene.** Always pass `persist-credentials: false` to
