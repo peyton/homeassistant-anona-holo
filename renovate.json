@@ -4,11 +4,8 @@
     "config:recommended"
   ],
   "platformAutomerge": true,
-  "automergeType": "pr",
   "dependencyDashboard": false,
-  "dependencyDashboardAutoclose": true,
   "rebaseWhen": "behind-base-branch",
-  "minimumReleaseAge": "3 days",
   "labels": [
     "dependencies",
     "renovate"
@@ -26,7 +23,8 @@
         "patch",
         "minor"
       ],
-      "automerge": true
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
     },
     {
       "matchManagers": [

@@ -12,6 +12,7 @@ gh = "2.90.0"
 
 [settings]
 experimental = true
+lockfile = true
 
 [env]
 HK_MISE = "1"
