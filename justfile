@@ -49,6 +49,15 @@ develop:
     export PYTHONPATH="${PYTHONPATH:-}:${PWD}/custom_components"
     exec .venv/bin/hass --config "${PWD}/config" --debug
 
+codex-setup:
+    ./scripts/codex setup
+
+codex-develop:
+    ./scripts/codex develop
+
+codex-check:
+    ./scripts/codex check
+
 act args='':
     act --bind --container-architecture linux/amd64 -P ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-latest {{ args }}
 
