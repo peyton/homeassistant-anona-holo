@@ -113,7 +113,7 @@ def test_lock_entity_marks_itself_unavailable_after_online_error() -> None:
 def test_async_setup_entry_only_adds_lock_devices() -> None:
     """Entity setup should filter the device list to lock hardware only."""
     api = Mock()
-    api.get_devices = AsyncMock(return_value=[LOCK_DEVICE, OTHER_DEVICE])
+    api.get_all_devices = AsyncMock(return_value=[LOCK_DEVICE, OTHER_DEVICE])
     hass = SimpleNamespace(data={DOMAIN: {"entry-1": api}})
     entry = SimpleNamespace(entry_id="entry-1")
     added_entities: list[AnonaHoloLock] = []
@@ -138,3 +138,4 @@ def test_async_setup_entry_only_adds_lock_devices() -> None:
     assert added_entities[0].unique_id == f"{DOMAIN}_device-123"
     assert added_entities[0].name == "Front Door Lock"
     assert update_before_add_flags == [True]
+    api.get_all_devices.assert_awaited_once()

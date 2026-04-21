@@ -29,7 +29,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up lock entities from a config entry."""
     api: AnonaApi = hass.data[DOMAIN][entry.entry_id]
-    devices = await api.get_devices()
+    devices = await api.get_all_devices()
     entities = [
         AnonaHoloLock(api, device)
         for device in devices
