@@ -112,5 +112,11 @@ gh release view v2026.4.0
 
 - Runtime code lives in `custom_components/anona_holo`.
 - Fixture-backed tests live in `tests/`.
+- CI now includes Home Assistant runtime config-entry lifecycle coverage (setup,
+  auth/not-ready mapping, unload cleanup) and entity/service behavior tests for
+  the lock platform.
+- Future hardening we can add later: step 3 HTTP-boundary tests with a local
+  `aiohttp` test server, and step 4 an optional secret-backed live smoke
+  workflow against a sacrificial test account/device.
 - The migration exec plan is in [`docs/execplans/2026-04-01-align-anona-security-with-captured-api.md`](docs/execplans/2026-04-01-align-anona-security-with-captured-api.md).
 - The websocket command capture note is in [`docs/2026-04-02-anona-websocket-command-capture.md`](docs/2026-04-02-anona-websocket-command-capture.md).
