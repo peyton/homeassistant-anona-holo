@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from homeassistant.const import Platform
@@ -15,14 +16,27 @@ from .const import (
     CONF_HOME_ID,
     CONF_PASSWORD,
     CONF_USER_ID,
+    DATA_API,
+    DATA_COORDINATORS,
+    DATA_DEVICES,
+    DEVICE_TYPE_LOCK,
     DOMAIN,
 )
+from .coordinator import AnonaDeviceCoordinator
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-PLATFORMS: list[Platform] = [Platform.LOCK]
+_LOGGER = logging.getLogger(__name__)
+
+PLATFORMS: list[Platform] = [
+    Platform.LOCK,
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.SWITCH,
+    Platform.UPDATE,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -36,9 +50,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         login_context = await api.login(
-            entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD]
+            entry.data[CONF_EMAIL],
+            entry.data[CONF_PASSWORD],
         )
         await api.get_homes()
+        all_devices = await api.get_all_devices()
     except AnonaAuthError as err:
         raise ConfigEntryAuthFailed(str(err)) from err
     except (AnonaApiError, TimeoutError) as err:
@@ -51,7 +67,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if updated_data != entry.data:
         hass.config_entries.async_update_entry(entry, data=updated_data)
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = api
+    lock_devices = [
+        device for device in all_devices if device.device_type == DEVICE_TYPE_LOCK
+    ]
+    if not lock_devices:
+        _LOGGER.warning("No supported lock devices were discovered for this account")
+
+    try:
+        switch_settings_by_device_id = await api.get_device_switch_list_by_home()
+    except AnonaApiError as err:
+        _LOGGER.debug("Initial getDeviceSwitchListByHomeId preload failed: %s", err)
+        switch_settings_by_device_id = {}
+
+    coordinators: dict[str, AnonaDeviceCoordinator] = {}
+    for device in lock_devices:
+        coordinator = AnonaDeviceCoordinator(
+            hass,
+            api=api,
+            device=device,
+            config_entry=entry,
+            initial_switch_settings=switch_settings_by_device_id.get(device.device_id),
+        )
+        try:
+            await coordinator.async_config_entry_first_refresh()
+        except (AnonaApiError, TimeoutError) as err:
+            raise ConfigEntryNotReady(
+                f"Failed initial refresh for {device.device_id}: {err}"
+            ) from err
+        coordinators[device.device_id] = coordinator
+
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+        DATA_API: api,
+        DATA_DEVICES: {device.device_id: device for device in lock_devices},
+        DATA_COORDINATORS: coordinators,
+    }
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

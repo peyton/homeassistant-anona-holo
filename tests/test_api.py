@@ -17,6 +17,7 @@ from aiohttp import WSMsgType
 import custom_components.anona_holo.api as api_module
 from custom_components.anona_holo.api import (
     AnonaApi,
+    DeviceInfoContext,
     WebsocketMessage,
     build_authenticated_signature,
     build_command_content,
@@ -24,9 +25,14 @@ from custom_components.anona_holo.api import (
     build_websocket_command_payload,
     decode_response_envelope,
     decode_websocket_message,
+    deserialize_silent_ota_time_window,
     encrypt_websocket_payload,
     hash_password,
+    is_firmware_update_available,
     normalize_device_context,
+    normalize_device_info_context,
+    normalize_device_switch_settings,
+    normalize_firmware_update_context,
     parse_lock_status,
 )
 from custom_components.anona_holo.const import (
@@ -737,3 +743,201 @@ def test_lock_and_unlock_send_live_compatible_websocket_frames(
         "target": 2,
         "ts": FIXTURE["websocket_commands"]["unlock"]["ts"],
     }
+
+
+def test_normalize_device_info_switch_and_firmware_payloads() -> None:
+    """New context normalizers should map raw payloads into typed fields."""
+    info_context = normalize_device_info_context(
+        {
+            "deviceId": "device-123",
+            "type": 76,
+            "module": 76001,
+            "channel": 76001001,
+            "softwareVersionNumber": "1.5.100",
+            "softwareSubVersion": "a",
+            "ip": "192.168.2.209",
+            "wifiApSsid": "MyWifi",
+            "wifiMac": "AA:BB:CC:DD:EE:FF",
+            "btMac": "11:22:33:44:55:66",
+            "timezoneId": "America/Los_Angeles",
+            "silentOTA": True,
+            "silentOTATime": (
+                '{"beginHour":2,"beginMinute":0,"endHour":4,"endMinute":0}'
+            ),
+            "lastOnlineTs": 1775103001462,
+        }
+    )
+    switch_settings = normalize_device_switch_settings(
+        {
+            "deviceId": "device-123",
+            "mainSwitch": True,
+            "ugentNotifySwitch": True,
+            "importantNotifySwitch": False,
+            "normalNotifySwitch": True,
+        }
+    )
+    firmware_context = normalize_firmware_update_context(
+        {
+            "version": "1.5.189",
+            "subVersion": "a",
+            "newVersion": True,
+            "desc": "Firmware release notes",
+            "fileUrl": "https://example.com/firmware.bin",
+            "releaseTime": 1729132842000,
+            "fileMd5": "abc123",
+            "fileSize": 1024,
+            "forced": False,
+        },
+        device_id="device-123",
+        installed_version="1.5.100",
+    )
+
+    assert info_context.silent_ota_time == "02:00-04:00"
+    assert info_context.firmware_version == "1.5.100"
+    assert switch_settings.important_notify_switch is False
+    assert firmware_context.installed_version == "1.5.100"
+    assert firmware_context.latest_version == "1.5.189"
+    assert firmware_context.new_version is True
+
+
+def test_update_device_switch_settings_uses_expected_payload_shape() -> None:
+    """Switch writes should include all four switch fields with captured key names."""
+    api, session = _make_api(
+        [
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success({"success": True})),
+        ],
+        authed=True,
+    )
+
+    settings = asyncio.run(
+        api.update_device_switch_settings(
+            "device-123",
+            main_switch=True,
+            ugent_notify_switch=False,
+            important_notify_switch=True,
+            normal_notify_switch=False,
+        )
+    )
+
+    assert settings.device_id == "device-123"
+    assert session.requests[1]["json"] == {
+        "deviceId": "device-123",
+        "mainSwitch": True,
+        "ugentNotifySwitch": False,
+        "importantNotifySwitch": True,
+        "normalNotifySwitch": False,
+        "uuid": FIXTURE["signature_fixture"]["client_uuid"],
+        "channel": APP_CHANNEL,
+        "ts": FIXTURE["server_ts"],
+        "token": "session-token",
+        "sig": FIXTURE["signature_fixture"]["auth_sig"],
+    }
+
+
+def test_set_silent_ota_uses_expected_payload_shape() -> None:
+    """Silent OTA writes should serialize the OTA window into app JSON format."""
+    api, session = _make_api(
+        [
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success({"success": True})),
+        ],
+        authed=True,
+    )
+
+    asyncio.run(
+        api.set_silent_ota(
+            "device-123",
+            enabled=True,
+            silent_ota_time="02:00-04:00",
+        )
+    )
+
+    assert session.requests[1]["json"] == {
+        "deviceId": "device-123",
+        "silentOTA": True,
+        "silentOTATime": ('{"beginHour":2,"beginMinute":0,"endHour":4,"endMinute":0}'),
+        "uuid": FIXTURE["signature_fixture"]["client_uuid"],
+        "channel": APP_CHANNEL,
+        "ts": FIXTURE["server_ts"],
+        "token": "session-token",
+        "sig": FIXTURE["signature_fixture"]["auth_sig"],
+    }
+    assert (
+        deserialize_silent_ota_time_window(
+            '{"beginHour":2,"beginMinute":0,"endHour":4,"endMinute":0}'
+        )
+        == "02:00-04:00"
+    )
+
+
+def test_get_firmware_update_context_uses_info_version_fallback() -> None:
+    """Firmware normalization should fall back to getDeviceInfo installed version."""
+    api, _ = _make_api(
+        [
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(
+                _encode_success(
+                    {
+                        "version": "1.5.189",
+                        "newVersion": True,
+                        "desc": "Firmware release notes",
+                    }
+                )
+            ),
+        ],
+        authed=True,
+    )
+    api._device_info_by_id["device-123"] = DeviceInfoContext(
+        device_id="device-123",
+        device_type=76,
+        device_module=76001,
+        device_channel=76001001,
+        firmware_version="1.5.100",
+        firmware_sub_version=None,
+        ip_address=None,
+        wifi_ap_ssid=None,
+        wifi_mac=None,
+        bt_mac=None,
+        timezone_id=None,
+        silent_ota_enabled=None,
+        silent_ota_time=None,
+        silent_ota_time_raw=None,
+        last_online_ts=None,
+        raw={},
+    )
+    device = normalize_device_context(FIXTURE["device_list"]["response_object"][0])
+
+    context = asyncio.run(api.get_firmware_update_context(device))
+
+    assert context.installed_version == "1.5.100"
+    assert context.latest_version == "1.5.189"
+    assert context.new_version is True
+
+
+def test_update_availability_prefers_version_compare_then_flag_fallback() -> None:
+    """Firmware availability should compare version ordering before fallback checks."""
+    assert (
+        is_firmware_update_available(
+            installed_version="1.5.100",
+            latest_version="1.5.189",
+            new_version=False,
+        )
+        is True
+    )
+    assert (
+        is_firmware_update_available(
+            installed_version="1.5.189",
+            latest_version="1.5.189",
+            new_version=True,
+        )
+        is False
+    )
+    assert (
+        is_firmware_update_available(
+            installed_version="x",
+            latest_version="y",
+            new_version=True,
+        )
+        is True
+    )

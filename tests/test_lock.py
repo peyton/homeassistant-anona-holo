@@ -5,17 +5,18 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 
-from custom_components.anona_holo.api import (
-    AnonaApiError,
-    DeviceContext,
-    LockStatus,
-    OnlineStatus,
+from custom_components.anona_holo.api import DeviceContext, LockStatus, OnlineStatus
+from custom_components.anona_holo.const import (
+    DATA_COORDINATORS,
+    DEVICE_TYPE_LOCK,
+    DOMAIN,
 )
-from custom_components.anona_holo.const import DEVICE_TYPE_LOCK, DOMAIN
+from custom_components.anona_holo.coordinator import AnonaDeviceSnapshot
 from custom_components.anona_holo.lock import AnonaHoloLock, async_setup_entry
 
 LOCK_DEVICE = DeviceContext(
@@ -44,6 +45,12 @@ ONLINE_STATUS = OnlineStatus(
     last_alive_ts=None,
     raw={"online": True},
 )
+OFFLINE_STATUS = OnlineStatus(
+    online=False,
+    create_ts=1775103001462,
+    last_alive_ts=None,
+    raw={"online": False},
+)
 LOCK_STATUS = LockStatus(
     locked=True,
     lock_status_code=1,
@@ -66,17 +73,44 @@ LOCK_STATUS = LockStatus(
 )
 
 
-def test_lock_entity_maps_status_objects_and_dispatches_commands() -> None:
-    """The entity should map typed status models and forward lock commands."""
+@dataclass
+class _FakeCoordinator:
+    """Minimal coordinator object for coordinator-backed entity tests."""
+
+    device: DeviceContext
+    api: Any
+    data: AnonaDeviceSnapshot
+    last_update_success: bool = True
+
+    def __post_init__(self) -> None:
+        self.async_request_refresh = AsyncMock()
+
+
+def _coordinator(
+    *,
+    online_status: OnlineStatus | None = ONLINE_STATUS,
+    lock_status: LockStatus | None = LOCK_STATUS,
+    device: DeviceContext = LOCK_DEVICE,
+) -> _FakeCoordinator:
     api = Mock()
-    api.get_device_online_status = AsyncMock(return_value=ONLINE_STATUS)
-    api.get_device_status = AsyncMock(return_value=LOCK_STATUS)
     api.lock = AsyncMock()
     api.unlock = AsyncMock()
+    return _FakeCoordinator(
+        device=device,
+        api=api,
+        data=AnonaDeviceSnapshot(
+            device=device,
+            online_status=online_status,
+            lock_status=lock_status,
+        ),
+    )
 
-    entity = AnonaHoloLock(api, LOCK_DEVICE)
 
-    asyncio.run(entity.async_update())
+def test_lock_entity_maps_snapshot_and_dispatches_commands() -> None:
+    """The lock entity should map snapshot values and forward lock commands."""
+    coordinator = _coordinator()
+    entity = AnonaHoloLock(cast("Any", coordinator))
+
     asyncio.run(entity.async_unlock())
     asyncio.run(entity.async_lock())
     attrs = entity.extra_state_attributes or {}
@@ -84,47 +118,47 @@ def test_lock_entity_maps_status_objects_and_dispatches_commands() -> None:
     assert entity.is_locked is True
     assert entity.available is True
     assert attrs["battery_level"] == 100
-    assert attrs["lock_battery_capacity"] == 100
     assert attrs["battery_voltage"] == 180
     assert attrs["charge_status_code"] == 1
     assert attrs["door_state_code"] == 1
     assert attrs["long_endurance_mode_status_code"] == 0
     assert attrs["raw_data_hex_str"] == "deadbeef"
     assert attrs["device_id"] == "device-123"
-    api.get_device_online_status.assert_awaited_once_with(LOCK_DEVICE)
-    api.get_device_status.assert_awaited_once_with(LOCK_DEVICE)
-    api.unlock.assert_awaited_once_with(LOCK_DEVICE)
-    api.lock.assert_awaited_once_with(LOCK_DEVICE)
+
+    coordinator.api.unlock.assert_awaited_once_with(LOCK_DEVICE)
+    coordinator.api.lock.assert_awaited_once_with(LOCK_DEVICE)
+    assert coordinator.async_request_refresh.await_count == 2
 
 
-def test_lock_entity_marks_itself_unavailable_after_online_error() -> None:
-    """A polling error should mark the entity unavailable without crashing."""
-    api = Mock()
-    api.get_device_online_status = AsyncMock(side_effect=AnonaApiError("boom"))
-
-    entity = AnonaHoloLock(api, LOCK_DEVICE)
-
-    asyncio.run(entity.async_update())
+def test_lock_entity_available_is_false_when_offline() -> None:
+    """Offline coordinator snapshots should mark the lock unavailable."""
+    coordinator = _coordinator(online_status=OFFLINE_STATUS)
+    entity = AnonaHoloLock(cast("Any", coordinator))
 
     assert entity.available is False
-    assert entity.is_locked is None
 
 
 def test_async_setup_entry_only_adds_lock_devices() -> None:
-    """Entity setup should filter the device list to lock hardware only."""
-    api = Mock()
-    api.get_all_devices = AsyncMock(return_value=[LOCK_DEVICE, OTHER_DEVICE])
-    hass = SimpleNamespace(data={DOMAIN: {"entry-1": api}})
+    """Entity setup should filter coordinators to supported lock hardware only."""
+    lock_coordinator = _coordinator(device=LOCK_DEVICE)
+    other_coordinator = _coordinator(device=OTHER_DEVICE)
+    hass = SimpleNamespace(
+        data={
+            DOMAIN: {
+                "entry-1": {
+                    DATA_COORDINATORS: {
+                        "device-123": lock_coordinator,
+                        "device-999": other_coordinator,
+                    }
+                }
+            }
+        }
+    )
     entry = SimpleNamespace(entry_id="entry-1")
     added_entities: list[AnonaHoloLock] = []
-    update_before_add_flags: list[bool] = []
 
-    def add_entities(
-        new_entities: list[AnonaHoloLock],
-        update_before_add: object | None = None,
-    ) -> None:
+    def add_entities(new_entities: list[AnonaHoloLock]) -> None:
         added_entities.extend(new_entities)
-        update_before_add_flags.append(bool(update_before_add))
 
     asyncio.run(
         async_setup_entry(
@@ -135,7 +169,4 @@ def test_async_setup_entry_only_adds_lock_devices() -> None:
     )
 
     assert len(added_entities) == 1
-    assert added_entities[0].unique_id == f"{DOMAIN}_device-123"
-    assert added_entities[0].name == "Front Door Lock"
-    assert update_before_add_flags == [True]
-    api.get_all_devices.assert_awaited_once()
+    assert added_entities[0].unique_id == "anona_holo_device-123_lock"
