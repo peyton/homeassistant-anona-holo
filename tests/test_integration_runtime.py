@@ -19,6 +19,9 @@ from custom_components.anona_holo.api import (
     AnonaApiError,
     AnonaAuthError,
     DeviceContext,
+    DeviceInfoContext,
+    DeviceSwitchSettings,
+    FirmwareUpdateContext,
     HomeContext,
     LockStatus,
     LoginContext,
@@ -30,6 +33,7 @@ from custom_components.anona_holo.const import (
     CONF_HOME_ID,
     CONF_PASSWORD,
     CONF_USER_ID,
+    DATA_API,
     DEVICE_TYPE_LOCK,
     DOMAIN,
 )
@@ -113,6 +117,17 @@ def _build_fake_api(
     )
     api.home_id = "home-123"
     api.get_all_devices = AsyncMock(return_value=[_lock_device(), _other_device()])
+    default_switch_settings = DeviceSwitchSettings(
+        device_id="device-123",
+        main_switch=True,
+        ugent_notify_switch=True,
+        important_notify_switch=True,
+        normal_notify_switch=True,
+        raw={},
+    )
+    api.get_device_switch_list_by_home = AsyncMock(
+        return_value={"device-123": default_switch_settings}
+    )
     api.get_device_online_status = AsyncMock(
         return_value=OnlineStatus(
             online=True,
@@ -145,6 +160,44 @@ def _build_fake_api(
     )
     api.lock = AsyncMock()
     api.unlock = AsyncMock()
+    api.get_device_info_context = AsyncMock(
+        return_value=DeviceInfoContext(
+            device_id="device-123",
+            device_type=DEVICE_TYPE_LOCK,
+            device_module=76001,
+            device_channel=76001001,
+            firmware_version="1.0.0",
+            firmware_sub_version="0",
+            ip_address=None,
+            wifi_ap_ssid=None,
+            wifi_mac=None,
+            bt_mac=None,
+            timezone_id=None,
+            silent_ota_enabled=True,
+            silent_ota_time="03:00-05:00",
+            silent_ota_time_raw="03:00-05:00",
+            last_online_ts=1775103452000,
+            raw={},
+        )
+    )
+    api.get_device_switch_settings = AsyncMock(return_value=default_switch_settings)
+    api.get_firmware_update_context = AsyncMock(
+        return_value=FirmwareUpdateContext(
+            device_id="device-123",
+            installed_version="1.0.0",
+            latest_version="1.0.0",
+            latest_sub_version=None,
+            new_version=False,
+            version_order=None,
+            release_notes=None,
+            release_url=None,
+            release_ts=None,
+            file_md5=None,
+            file_size=None,
+            is_forced=None,
+            raw={},
+        )
+    )
     return api
 
 
@@ -164,7 +217,7 @@ async def test_runtime_setup_creates_entity_and_routes_lock_services(
 
     assert entry.state is ConfigEntryState.LOADED
     assert entry.data[CONF_USER_ID] == "fresh-user-id"
-    assert hass.data[DOMAIN][entry.entry_id] is fake_api
+    assert hass.data[DOMAIN][entry.entry_id][DATA_API] is fake_api
     fake_api.login.assert_awaited_once_with("user@example.com", "super-secret")
 
     lock_states = hass.states.async_all(LOCK_DOMAIN)
