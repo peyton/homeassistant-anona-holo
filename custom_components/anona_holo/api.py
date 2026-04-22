@@ -8,6 +8,7 @@ import binascii
 import hashlib
 import json
 import logging
+import re
 import time
 import zlib
 from collections.abc import Mapping
@@ -25,15 +26,21 @@ from .const import (
     COMMAND_ID_LOCK,
     COMMAND_ID_UNLOCK,
     DEFAULT_LANG,
+    DEFAULT_SILENT_OTA_TIME_WINDOW,
     DEVICE_TYPE_LOCK,
     ENDPOINT_DEVICE_CERTS,
     ENDPOINT_DEVICE_INFO,
     ENDPOINT_DEVICE_LIST,
     ENDPOINT_DEVICE_ONLINE,
     ENDPOINT_DEVICE_STATUS,
+    ENDPOINT_DEVICE_SWITCH,
+    ENDPOINT_DEVICE_SWITCH_LIST_BY_HOME,
     ENDPOINT_GET_TS,
     ENDPOINT_HOME_LIST,
     ENDPOINT_LOGIN,
+    ENDPOINT_SET_SILENT_OTA,
+    ENDPOINT_UPDATE_DEVICE_SWITCH,
+    ENDPOINT_VERSION_CHECK,
     ENDPOINT_WEBSOCKET_ADDRESS,
     PASSWORD_SIGN_SALT,
     STATUS_SMART_TYPE,
@@ -53,6 +60,12 @@ AES_BLOCK_SIZE_BITS = 128
 AES_BLOCK_SIZE_BYTES = 16
 WEBSOCKET_AES_KEY_LENGTH = 16
 WEBSOCKET_FRAME_CRC_SIZE_BYTES = 4
+SILENT_OTA_MAX_HOUR = 23
+SILENT_OTA_MAX_MINUTE = 59
+SILENT_OTA_WINDOW_PATTERN = re.compile(
+    r"^(?P<begin_hour>\d{1,2}):(?P<begin_minute>\d{2})-(?P<end_hour>\d{1,2}):(?P<end_minute>\d{2})$"
+)
+VERSION_TOKEN_PATTERN = re.compile(r"[A-Za-z]+|\d+")
 
 type DecodedProtoValue = int | dict[str, DecodedProtoValue] | list[DecodedProtoValue]
 
@@ -143,6 +156,59 @@ class LockStatus:
     refresh_ts: int | None
     start_type: int | None
     raw_fields: dict[str, DecodedProtoValue]
+
+
+@dataclass(slots=True, frozen=True)
+class DeviceInfoContext:
+    """Normalized device info details from getDeviceInfo."""
+
+    device_id: str
+    device_type: int | None
+    device_module: int | None
+    device_channel: int | None
+    firmware_version: str | None
+    firmware_sub_version: str | None
+    ip_address: str | None
+    wifi_ap_ssid: str | None
+    wifi_mac: str | None
+    bt_mac: str | None
+    timezone_id: str | None
+    silent_ota_enabled: bool | None
+    silent_ota_time: str | None
+    silent_ota_time_raw: str | None
+    last_online_ts: int | None
+    raw: dict[str, Any]
+
+
+@dataclass(slots=True, frozen=True)
+class DeviceSwitchSettings:
+    """Normalized notification switch settings for a device."""
+
+    device_id: str
+    main_switch: bool
+    ugent_notify_switch: bool
+    important_notify_switch: bool
+    normal_notify_switch: bool
+    raw: dict[str, Any]
+
+
+@dataclass(slots=True, frozen=True)
+class FirmwareUpdateContext:
+    """Firmware version and release metadata returned by checkNewRomFromApp."""
+
+    device_id: str
+    installed_version: str | None
+    latest_version: str | None
+    latest_sub_version: str | None
+    new_version: bool | None
+    version_order: int | None
+    release_notes: str | None
+    release_url: str | None
+    release_ts: int | None
+    file_md5: str | None
+    file_size: int | None
+    is_forced: bool | None
+    raw: dict[str, Any]
 
 
 @dataclass(slots=True, frozen=True)
@@ -270,6 +336,9 @@ class AnonaApi:
         self._user_id = user_id
         self._signature_provider = signature_provider or NativeSignatureProvider()
         self._devices_by_id: dict[str, DeviceContext] = {}
+        self._device_info_by_id: dict[str, DeviceInfoContext] = {}
+        self._device_switch_settings_by_id: dict[str, DeviceSwitchSettings] = {}
+        self._firmware_update_by_id: dict[str, FirmwareUpdateContext] = {}
 
     @property
     def client_uuid(self) -> str:
@@ -467,6 +536,165 @@ class AnonaApi:
             status.raw_fields,
         )
         return status
+
+    async def get_device_info_context(
+        self,
+        device: DeviceContext | str,
+    ) -> DeviceInfoContext:
+        """Fetch and normalize detailed device metadata."""
+        device_id = self._resolve_device_id(device)
+        result = await self._post_signed(ENDPOINT_DEVICE_INFO, {"deviceId": device_id})
+        result_map = _require_mapping(result, "device info response")
+        context = normalize_device_info_context(result_map)
+        self._device_info_by_id[device_id] = context
+
+        try:
+            normalized_device = normalize_device_context(result_map)
+        except AnonaApiError:
+            pass
+        else:
+            self._devices_by_id[normalized_device.device_id] = normalized_device
+        return context
+
+    async def get_device_switch_settings(
+        self,
+        device: DeviceContext | str,
+    ) -> DeviceSwitchSettings:
+        """Fetch and normalize the notification switch settings for a device."""
+        device_id = self._resolve_device_id(device)
+        result = await self._post_signed(
+            ENDPOINT_DEVICE_SWITCH, {"deviceId": device_id}
+        )
+        result_map = _require_mapping(result, "device switch response")
+        settings = normalize_device_switch_settings(result_map, device_id=device_id)
+        self._device_switch_settings_by_id[device_id] = settings
+        return settings
+
+    async def get_device_switch_list_by_home(
+        self,
+        home_id: str | None = None,
+    ) -> dict[str, DeviceSwitchSettings]:
+        """Return switch settings for devices in a home via list-by-home endpoint."""
+        resolved_home_id = home_id or self._home_id
+        if resolved_home_id is None:
+            message = "No home_id available; login and fetch homes first"
+            raise AnonaApiError(message)
+        result = await self._post_signed(
+            ENDPOINT_DEVICE_SWITCH_LIST_BY_HOME,
+            {"homeId": resolved_home_id},
+        )
+        payload: list[Mapping[str, Any]]
+        if isinstance(result, list):
+            payload = [item for item in result if isinstance(item, Mapping)]
+        else:
+            result_map = _require_mapping(result, "device switch list response")
+            raw_list = result_map.get("deviceSwitchList", [])
+            if not isinstance(raw_list, list):
+                message = "Device switch list response was not a list"
+                raise AnonaApiError(message)
+            payload = [item for item in raw_list if isinstance(item, Mapping)]
+
+        settings_by_device_id: dict[str, DeviceSwitchSettings] = {}
+        for item in payload:
+            settings = normalize_device_switch_settings(item)
+            settings_by_device_id[settings.device_id] = settings
+            self._device_switch_settings_by_id[settings.device_id] = settings
+        return settings_by_device_id
+
+    async def update_device_switch_settings(
+        self,
+        device: DeviceContext | str,
+        *,
+        main_switch: bool,
+        ugent_notify_switch: bool,
+        important_notify_switch: bool,
+        normal_notify_switch: bool,
+    ) -> DeviceSwitchSettings:
+        """Persist notification switch settings and return the normalized result."""
+        device_id = self._resolve_device_id(device)
+        payload = {
+            "deviceId": device_id,
+            "mainSwitch": bool(main_switch),
+            "ugentNotifySwitch": bool(ugent_notify_switch),
+            "importantNotifySwitch": bool(important_notify_switch),
+            "normalNotifySwitch": bool(normal_notify_switch),
+        }
+        result = await self._post_signed(ENDPOINT_UPDATE_DEVICE_SWITCH, payload)
+        result_map = _optional_mapping(result) or {}
+        merged_payload = {**payload, **result_map}
+        settings = normalize_device_switch_settings(merged_payload, device_id=device_id)
+        self._device_switch_settings_by_id[device_id] = settings
+        return settings
+
+    async def get_firmware_update_context(
+        self,
+        device: DeviceContext | str,
+    ) -> FirmwareUpdateContext:
+        """Fetch and normalize firmware update metadata for a device."""
+        device_context = self._resolve_device_context(device)
+        result = await self._post_signed(
+            ENDPOINT_VERSION_CHECK,
+            {
+                "deviceId": device_context.device_id,
+                "deviceType": device_context.device_type,
+                "deviceModule": device_context.device_module,
+                "deviceChannel": device_context.device_channel,
+            },
+        )
+        result_map = _require_mapping(result, "firmware version response")
+        info_context = self._device_info_by_id.get(device_context.device_id)
+        firmware_context = normalize_firmware_update_context(
+            result_map,
+            device_id=device_context.device_id,
+            installed_version=info_context.firmware_version if info_context else None,
+        )
+        self._firmware_update_by_id[device_context.device_id] = firmware_context
+        return firmware_context
+
+    async def set_silent_ota(
+        self,
+        device: DeviceContext | str,
+        *,
+        enabled: bool,
+        silent_ota_time: str,
+    ) -> None:
+        """Update the silent OTA window for a device."""
+        device_id = self._resolve_device_id(device)
+        window = silent_ota_time.strip() or DEFAULT_SILENT_OTA_TIME_WINDOW
+        serialized_window = serialize_silent_ota_time_window(window)
+        await self._post_signed(
+            ENDPOINT_SET_SILENT_OTA,
+            {
+                "deviceId": device_id,
+                "silentOTA": bool(enabled),
+                "silentOTATime": serialized_window,
+            },
+        )
+
+        existing_context = self._device_info_by_id.get(device_id)
+        if existing_context is None:
+            return
+        updated_raw = dict(existing_context.raw)
+        updated_raw["silentOTA"] = bool(enabled)
+        updated_raw["silentOTATime"] = serialized_window
+        self._device_info_by_id[device_id] = DeviceInfoContext(
+            device_id=existing_context.device_id,
+            device_type=existing_context.device_type,
+            device_module=existing_context.device_module,
+            device_channel=existing_context.device_channel,
+            firmware_version=existing_context.firmware_version,
+            firmware_sub_version=existing_context.firmware_sub_version,
+            ip_address=existing_context.ip_address,
+            wifi_ap_ssid=existing_context.wifi_ap_ssid,
+            wifi_mac=existing_context.wifi_mac,
+            bt_mac=existing_context.bt_mac,
+            timezone_id=existing_context.timezone_id,
+            silent_ota_enabled=bool(enabled),
+            silent_ota_time=deserialize_silent_ota_time_window(serialized_window),
+            silent_ota_time_raw=serialized_window,
+            last_online_ts=existing_context.last_online_ts,
+            raw=updated_raw,
+        )
 
     async def get_device_certs_for_owner(
         self, device: DeviceContext | str
@@ -760,6 +988,13 @@ class AnonaApi:
             )
             raise AnonaApiError(message) from err
 
+    def _resolve_device_id(self, device: DeviceContext | str) -> str:
+        """Resolve a device identifier from a context object or string."""
+        if isinstance(device, DeviceContext):
+            self._devices_by_id[device.device_id] = device
+            return device.device_id
+        return device
+
 
 def hash_password(password: str) -> str:
     """Hash a password with the app's discovered static salt."""
@@ -994,6 +1229,196 @@ def normalize_device_context(payload: Mapping[str, Any]) -> DeviceContext:
         serial_number=_coerce_string(payload.get("sn")),
         model=_coerce_string(payload.get("model")),
         raw=dict(payload),
+    )
+
+
+def normalize_device_info_context(payload: Mapping[str, Any]) -> DeviceInfoContext:
+    """Normalize a raw getDeviceInfo payload into a typed context."""
+    device_id = _require_string(payload.get("deviceId"), "deviceId")
+    silent_ota_time_raw = _coerce_string(payload.get("silentOTATime"))
+    return DeviceInfoContext(
+        device_id=device_id,
+        device_type=_coerce_int(payload.get("type") or payload.get("deviceType")),
+        device_module=_coerce_int(payload.get("module") or payload.get("deviceModule")),
+        device_channel=_coerce_int(
+            payload.get("channel") or payload.get("deviceChannel")
+        ),
+        firmware_version=_coerce_string(
+            payload.get("softwareVersionNumber")
+            or payload.get("versionNum")
+            or payload.get("deviceVersionNum")
+        ),
+        firmware_sub_version=_coerce_string(payload.get("softwareSubVersion")),
+        ip_address=_coerce_string(payload.get("ip")),
+        wifi_ap_ssid=_coerce_string(
+            payload.get("wifiApSsid") or payload.get("wifiName")
+        ),
+        wifi_mac=_coerce_string(payload.get("wifiMac") or payload.get("mac")),
+        bt_mac=_coerce_string(payload.get("btMac")),
+        timezone_id=_coerce_string(payload.get("timezoneId")),
+        silent_ota_enabled=_coerce_bool(payload.get("silentOTA")),
+        silent_ota_time=deserialize_silent_ota_time_window(silent_ota_time_raw),
+        silent_ota_time_raw=silent_ota_time_raw,
+        last_online_ts=_coerce_int(payload.get("lastOnlineTs")),
+        raw=dict(payload),
+    )
+
+
+def normalize_device_switch_settings(
+    payload: Mapping[str, Any],
+    *,
+    device_id: str | None = None,
+) -> DeviceSwitchSettings:
+    """Normalize a raw switch payload into typed notification switches."""
+    resolved_device_id = device_id or _coerce_string(payload.get("deviceId"))
+    if resolved_device_id is None:
+        message = "Expected device switch payload to include deviceId"
+        raise AnonaApiError(message)
+    return DeviceSwitchSettings(
+        device_id=resolved_device_id,
+        main_switch=bool(_coerce_bool(payload.get("mainSwitch"))),
+        ugent_notify_switch=bool(_coerce_bool(payload.get("ugentNotifySwitch"))),
+        important_notify_switch=bool(
+            _coerce_bool(payload.get("importantNotifySwitch"))
+        ),
+        normal_notify_switch=bool(_coerce_bool(payload.get("normalNotifySwitch"))),
+        raw=dict(payload),
+    )
+
+
+def normalize_firmware_update_context(
+    payload: Mapping[str, Any],
+    *,
+    device_id: str,
+    installed_version: str | None,
+) -> FirmwareUpdateContext:
+    """Normalize a firmware update payload into a typed context."""
+    latest_version = _coerce_string(
+        payload.get("version")
+        or payload.get("newVerNum")
+        or payload.get("targetVersionNum")
+    )
+    resolved_installed_version = (
+        _coerce_string(payload.get("deviceVersionNum"))
+        or _coerce_string(payload.get("versionNum"))
+        or installed_version
+    )
+    return FirmwareUpdateContext(
+        device_id=device_id,
+        installed_version=resolved_installed_version,
+        latest_version=latest_version,
+        latest_sub_version=_coerce_string(payload.get("subVersion")),
+        new_version=_coerce_bool(payload.get("newVersion")),
+        version_order=_coerce_int(payload.get("versionOrder")),
+        release_notes=_coerce_string(
+            payload.get("desc") or payload.get("newVersionDesc")
+        ),
+        release_url=_coerce_string(
+            payload.get("fileUrl") or payload.get("newVersionUrl")
+        ),
+        release_ts=_coerce_int(payload.get("releaseTime")),
+        file_md5=_coerce_string(payload.get("fileMd5")),
+        file_size=_coerce_int(payload.get("fileSize")),
+        is_forced=_coerce_bool(payload.get("forced")),
+        raw=dict(payload),
+    )
+
+
+def is_firmware_update_available(
+    installed_version: str | None,
+    latest_version: str | None,
+    *,
+    new_version: bool | None,
+) -> bool:
+    """Determine whether firmware update metadata indicates an available update."""
+    if installed_version and latest_version:
+        comparison = compare_versions(latest_version, installed_version)
+        if comparison is not None:
+            return comparison > 0
+        return bool(new_version and latest_version != installed_version)
+    return bool(new_version)
+
+
+def compare_versions(left: str, right: str) -> int | None:
+    """Compare two dotted-ish version strings, returning -1/0/1 when comparable."""
+    left_parts = _normalize_version_parts(left)
+    right_parts = _normalize_version_parts(right)
+    if left_parts is None or right_parts is None:
+        return None
+
+    max_len = max(len(left_parts), len(right_parts))
+    padded_left = left_parts + [(0, 0)] * (max_len - len(left_parts))
+    padded_right = right_parts + [(0, 0)] * (max_len - len(right_parts))
+    for left_part, right_part in zip(padded_left, padded_right, strict=False):
+        if left_part == right_part:
+            continue
+        if left_part > right_part:
+            return 1
+        return -1
+    return 0
+
+
+def deserialize_silent_ota_time_window(value: str | None) -> str | None:
+    """Normalize a silent OTA window string into `HH:MM-HH:MM` when possible."""
+    if value is None:
+        return None
+    matched_window = SILENT_OTA_WINDOW_PATTERN.fullmatch(value.strip())
+    if matched_window:
+        begin_hour = int(matched_window.group("begin_hour"))
+        begin_minute = int(matched_window.group("begin_minute"))
+        end_hour = int(matched_window.group("end_hour"))
+        end_minute = int(matched_window.group("end_minute"))
+        return _format_silent_ota_window(
+            begin_hour,
+            begin_minute,
+            end_hour,
+            end_minute,
+        )
+
+    mapping = _decode_json_mapping(value)
+    if mapping is None:
+        return None
+    begin_hour = _coerce_int(mapping.get("beginHour"))
+    begin_minute = _coerce_int(mapping.get("beginMinute"))
+    end_hour = _coerce_int(mapping.get("endHour"))
+    end_minute = _coerce_int(mapping.get("endMinute"))
+    if (
+        begin_hour is None
+        or begin_minute is None
+        or end_hour is None
+        or end_minute is None
+    ):
+        return None
+    return _format_silent_ota_window(
+        begin_hour=begin_hour,
+        begin_minute=begin_minute,
+        end_hour=end_hour,
+        end_minute=end_minute,
+    )
+
+
+def serialize_silent_ota_time_window(value: str) -> str:
+    """Serialize a silent OTA window value into the app's JSON string format."""
+    normalized_window = deserialize_silent_ota_time_window(value)
+    if normalized_window is None:
+        message = f"Invalid silent OTA time window {value!r}"
+        raise AnonaApiError(message)
+    matched_window = SILENT_OTA_WINDOW_PATTERN.fullmatch(normalized_window)
+    if matched_window is None:
+        message = f"Invalid normalized silent OTA time window {normalized_window!r}"
+        raise AnonaApiError(message)
+    begin_hour = int(matched_window.group("begin_hour"))
+    begin_minute = int(matched_window.group("begin_minute"))
+    end_hour = int(matched_window.group("end_hour"))
+    end_minute = int(matched_window.group("end_minute"))
+    return json.dumps(
+        {
+            "beginHour": begin_hour,
+            "beginMinute": begin_minute,
+            "endHour": end_hour,
+            "endMinute": end_minute,
+        },
+        separators=(",", ":"),
     )
 
 
@@ -1237,6 +1662,23 @@ def _coerce_int(value: Any) -> int | None:
     return None
 
 
+def _coerce_bool(value: Any) -> bool | None:
+    """Coerce a scalar into a boolean when possible."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return None
+
+
 def _coerce_string(value: Any) -> str | None:
     """Coerce an arbitrary scalar into a string when possible."""
     if value is None:
@@ -1246,6 +1688,56 @@ def _coerce_string(value: Any) -> str | None:
     if isinstance(value, int):
         return str(value)
     return None
+
+
+def _decode_json_mapping(value: str) -> Mapping[str, Any] | None:
+    """Parse a JSON object string and return it as a mapping when valid."""
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, Mapping):
+        return None
+    return parsed
+
+
+def _format_silent_ota_window(
+    begin_hour: int,
+    begin_minute: int,
+    end_hour: int,
+    end_minute: int,
+) -> str:
+    """Format and validate a silent OTA time window."""
+    if not (
+        0 <= begin_hour <= SILENT_OTA_MAX_HOUR and 0 <= end_hour <= SILENT_OTA_MAX_HOUR
+    ):
+        message = "Silent OTA hour must be in 0..23"
+        raise AnonaApiError(message)
+    if not (
+        0 <= begin_minute <= SILENT_OTA_MAX_MINUTE
+        and 0 <= end_minute <= SILENT_OTA_MAX_MINUTE
+    ):
+        message = "Silent OTA minute must be in 0..59"
+        raise AnonaApiError(message)
+    return f"{begin_hour:02d}:{begin_minute:02d}-{end_hour:02d}:{end_minute:02d}"
+
+
+def _normalize_version_parts(version: str) -> list[tuple[int, int | str]] | None:
+    """Normalize a version string into comparable numeric/string parts."""
+    stripped = version.strip()
+    if not stripped:
+        return None
+    tokens = VERSION_TOKEN_PATTERN.findall(stripped)
+    if not tokens:
+        return None
+
+    normalized: list[tuple[int, int | str]] = []
+    for token in tokens:
+        if token.isdigit():
+            normalized.append((0, int(token)))
+            continue
+        normalized.append((1, token.lower()))
+    return normalized
 
 
 def _decode_websocket_aes_key(websocket_aes_key: str) -> bytes:

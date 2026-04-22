@@ -9,6 +9,22 @@ This integration currently supports:
 - lock and unlock commands
 - lock state
 - online and availability state
+- battery and telemetry sensors:
+  - battery level (enabled by default)
+  - battery voltage, keypad battery, last alive timestamp (diagnostic; disabled by default)
+- binary telemetry:
+  - lock jam / locking failure
+  - door open too long
+  - online
+  - low power mode and keypad connected (diagnostic; disabled by default)
+- writable controls:
+  - allow notifications
+  - abnormal notifications
+  - event notifications
+  - other notifications
+  - silent OTA
+- firmware update entity with installed/latest version, release notes, and release URL
+- config-entry diagnostics export with sensitive-field redaction
 
 **This integration does not support the Anona Holo Keypad.** Raw keypad-related diagnostic fields may still appear in lock attributes because the upstream lock status payload includes them, but no keypad entity or keypad controls are provided.
 
