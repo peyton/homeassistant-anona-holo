@@ -11,8 +11,10 @@ This integration currently supports:
 - online and availability state
 - battery and telemetry sensors:
   - battery level (enabled by default)
-  - battery voltage, keypad battery, last alive timestamp (diagnostic; disabled by default)
+  - auto-lock delay and sound volume (enabled by default)
+  - keypad battery and last alive timestamp (diagnostic; disabled by default)
 - binary telemetry:
+  - auto-lock enabled
   - lock jam / locking failure
   - door open too long
   - online
@@ -52,6 +54,7 @@ This integration matches the Anona mobile app API shape that was captured and ve
 - normalized home and device discovery
 - online state from `/anona/device/api/getDeviceOnlineStatus`
 - lock state and battery parsing from `dataHexStr`
+- deeper config-state parsing from `dataHexStr`, including auto-lock timing, sound volume, and low-power mode
 - websocket bootstrap via `getDeviceCertsForOwner` and `getWebsocketAddress`
 
 The repository also includes the reconstructed websocket command helpers from the native app capture:

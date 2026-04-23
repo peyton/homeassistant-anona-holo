@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.anona_holo import (
@@ -141,13 +143,13 @@ def _build_fake_api(
             locked=True,
             lock_status_code=1,
             battery_capacity=100,
-            battery_voltage=180,
-            charge_status_code=1,
+            battery_voltage=None,
+            charge_status_code=None,
             door_state_code=1,
             door_status_code=1,
             has_locking_fail=False,
             has_door_been_open_long_time=False,
-            calibration_status_code=2,
+            calibration_status_code=None,
             long_endurance_mode_status_code=0,
             keypad_connection_status_code=1,
             keypad_battery_capacity=1,
@@ -156,6 +158,12 @@ def _build_fake_api(
             refresh_ts=1775103452000,
             start_type=48,
             raw_fields={"1": 1, "3": {"1": {"1": 100}}},
+            auto_lock_enabled=True,
+            auto_lock_delay_seconds=180,
+            auto_lock_delay_label="3 minutes",
+            sound_volume_code=2,
+            sound_volume="High",
+            low_power_mode_enabled=False,
         )
     )
     api.lock = AsyncMock()
@@ -250,6 +258,56 @@ async def test_runtime_setup_creates_entity_and_routes_lock_services(
 
     assert entry.state is ConfigEntryState.NOT_LOADED
     assert entry.entry_id not in hass.data.get(DOMAIN, {})
+
+
+@pytest.mark.asyncio
+async def test_runtime_reload_keeps_one_device_and_stable_unique_ids(
+    hass: HomeAssistant,
+) -> None:
+    """Reloading the entry should not duplicate the lock device or its entities."""
+    entry = _make_entry()
+    entry.add_to_hass(hass)
+    fake_api = _build_fake_api()
+
+    with patch("custom_components.anona_holo.AnonaApi", return_value=fake_api):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        entity_registry = er.async_get(hass)
+        device_registry = dr.async_get(hass)
+
+        def _entry_unique_ids() -> set[str]:
+            return {
+                entity.unique_id
+                for entity in entity_registry.entities.values()
+                if entity.config_entry_id == entry.entry_id
+            }
+
+        first_unique_ids = _entry_unique_ids()
+        first_device_matches = [
+            device
+            for device in device_registry.devices.values()
+            if (DOMAIN, "device-123") in device.identifiers
+        ]
+
+        assert first_device_matches
+        assert len(first_device_matches) == 1
+
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        second_unique_ids = _entry_unique_ids()
+        second_device_matches = [
+            device
+            for device in device_registry.devices.values()
+            if (DOMAIN, "device-123") in device.identifiers
+        ]
+
+    assert second_unique_ids == first_unique_ids
+    assert len(second_device_matches) == 1
 
 
 @pytest.mark.asyncio

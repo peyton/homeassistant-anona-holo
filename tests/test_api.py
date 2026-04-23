@@ -504,13 +504,33 @@ def test_parse_lock_status_decodes_the_captured_hex_payload() -> None:
     assert status.locked is True
     assert status.lock_status_code == 1
     assert status.battery_capacity == 100
-    assert status.charge_status_code == 1
-    assert status.battery_voltage == 180
+    assert status.auto_lock_enabled is True
+    assert status.auto_lock_delay_seconds == 180
+    assert status.auto_lock_delay_label == "3 minutes"
     assert status.door_state_code == 1
     assert status.door_status_code == 1
+    assert status.sound_volume_code == 2
+    assert status.sound_volume == "High"
+    assert status.low_power_mode_enabled is False
     assert status.long_endurance_mode_status_code == 0
     assert status.raw_fields["3"] == {"1": {"1": 100}}
     assert status.raw_fields["11"] == {"1": 1, "2": 180}
+
+
+def test_parse_lock_status_decodes_live_5_second_auto_lock_payload() -> None:
+    """The parser should expose the shorter auto-lock delay seen in live testing."""
+    status = parse_lock_status(
+        "080110011A040A0208642001280030003A100A0010001A040A02080020002A00320040004800520208025A04080110056202080068007A0208018001008A01020802"
+    )
+
+    assert status.locked is True
+    assert status.auto_lock_enabled is True
+    assert status.auto_lock_delay_seconds == 5
+    assert status.auto_lock_delay_label == "5 seconds"
+    assert status.sound_volume_code == 2
+    assert status.sound_volume == "High"
+    assert status.low_power_mode_enabled is False
+    assert status.raw_fields["11"] == {"1": 1, "2": 5}
 
 
 def test_get_device_status_uses_explicit_device_context() -> None:
