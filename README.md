@@ -26,7 +26,8 @@ This integration currently supports:
   - other notifications
   - silent OTA
 - firmware update entity with installed/latest version, release notes, and release URL
-- config-entry diagnostics export with sensitive-field redaction
+- config-entry and device diagnostics export with sensitive-field redaction
+- system health reporting with aggregate integration status and Anona API reachability
 
 **This integration does not support the Anona Holo Keypad.** Raw keypad-related diagnostic fields may still appear in lock attributes because the upstream lock status payload includes them, but no keypad entity or keypad controls are provided.
 

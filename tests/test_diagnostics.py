@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast
@@ -28,7 +29,10 @@ from custom_components.anona_holo.const import (
     DOMAIN,
 )
 from custom_components.anona_holo.coordinator import AnonaDeviceSnapshot
-from custom_components.anona_holo.diagnostics import async_get_config_entry_diagnostics
+from custom_components.anona_holo.diagnostics import (
+    async_get_config_entry_diagnostics,
+    async_get_device_diagnostics,
+)
 
 
 @dataclass
@@ -96,6 +100,9 @@ def test_diagnostics_redacts_sensitive_fields() -> None:
             silent_ota_time_raw='{"beginHour":2,"beginMinute":0,"endHour":4,"endMinute":0}',
             last_online_ts=1775103452000,
             raw={
+                "deviceNickName": "Front Door Lock",
+                "timezoneId": "America/Los_Angeles",
+                "wifiApSsid": "MyWifi",
                 "userName": "me@peytn.com",
                 "userCerts": "-----BEGIN CERTIFICATE-----",
             },
@@ -132,7 +139,7 @@ def test_diagnostics_redacts_sensitive_fields() -> None:
     )
     entry = SimpleNamespace(
         entry_id="entry-1",
-        title="Anona Holo",
+        title="Anona Holo (me@peytn.com)",
         data={
             CONF_EMAIL: "me@peytn.com",
             CONF_PASSWORD: "secret",
@@ -161,11 +168,15 @@ def test_diagnostics_redacts_sensitive_fields() -> None:
 
     assert diagnostics["entry"]["data"][CONF_EMAIL] == "**REDACTED**"
     assert diagnostics["entry"]["data"][CONF_PASSWORD] == "**REDACTED**"
+    assert diagnostics["entry"]["title"] == "**REDACTED**"
     assert diagnostics["api"]["home_id"] == "**REDACTED**"
     assert diagnostics["api"]["user_id"] == "**REDACTED**"
+    assert diagnostics["api"]["client_uuid"] == "**REDACTED**"
 
     exported_device = diagnostics["devices"][0]
     assert exported_device["device"]["device_id"] == "**REDACTED**"
+    assert exported_device["device"]["nickname"] == "**REDACTED**"
+    assert exported_device["device"]["serial_number"] == "**REDACTED**"
     assert (
         exported_device["snapshot"]["device_info_context"]["ip_address"]
         == "**REDACTED**"
@@ -173,3 +184,78 @@ def test_diagnostics_redacts_sensitive_fields() -> None:
     assert (
         exported_device["snapshot"]["device_info_context"]["wifi_mac"] == "**REDACTED**"
     )
+    assert (
+        exported_device["snapshot"]["device_info_context"]["raw"]["wifiApSsid"]
+        == "**REDACTED**"
+    )
+    assert (
+        exported_device["snapshot"]["device_info_context"]["raw"]["timezoneId"]
+        == "**REDACTED**"
+    )
+    serialized = json.dumps(diagnostics)
+    assert "me@peytn.com" not in serialized
+    assert "D15AF65C-BCF6-49B1-8A67-3A15793A11CE" not in serialized
+    assert "192.168.2.209" not in serialized
+    assert "AA:BB:CC:DD:EE:FF" not in serialized
+
+
+def test_device_diagnostics_are_scoped_to_the_requested_device() -> None:
+    """Device diagnostics should return the selected device payload only."""
+    device = DeviceContext(
+        device_id="device-123",
+        device_type=76,
+        device_module=76001,
+        device_channel=76001001,
+        nickname="Front Door Lock",
+        serial_number="SN-LOCK-123",
+        model="SL2001",
+        raw={"deviceId": "device-123"},
+    )
+    other_device = DeviceContext(
+        device_id="device-999",
+        device_type=76,
+        device_module=76001,
+        device_channel=76001001,
+        nickname="Back Door Lock",
+        serial_number="SN-LOCK-999",
+        model="SL2001",
+        raw={"deviceId": "device-999"},
+    )
+    snapshot = AnonaDeviceSnapshot(device=device)
+    other_snapshot = AnonaDeviceSnapshot(device=other_device)
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        title="Anona Holo",
+        data={},
+        options={},
+    )
+    hass = SimpleNamespace(
+        data={
+            DOMAIN: {
+                "entry-1": {
+                    DATA_API: None,
+                    DATA_DEVICES: {
+                        device.device_id: device,
+                        other_device.device_id: other_device,
+                    },
+                    DATA_COORDINATORS: {
+                        device.device_id: _FakeCoordinator(data=snapshot),
+                        other_device.device_id: _FakeCoordinator(data=other_snapshot),
+                    },
+                }
+            }
+        }
+    )
+    device_entry = SimpleNamespace(identifiers={(DOMAIN, device.device_id)})
+
+    diagnostics: dict[str, Any] = asyncio.run(
+        async_get_device_diagnostics(
+            cast("Any", hass),
+            cast("Any", entry),
+            cast("Any", device_entry),
+        )
+    )
+
+    assert len(diagnostics["devices"]) == 1
+    assert diagnostics["devices"][0]["device"]["model"] == "SL2001"
+    assert diagnostics["devices"][0]["device"]["device_id"] == "**REDACTED**"

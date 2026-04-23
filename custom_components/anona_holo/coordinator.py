@@ -21,6 +21,7 @@ from .api import (
     OnlineStatus,
 )
 from .const import DETAILS_REFRESH_INTERVAL_SECONDS, DOMAIN, UPDATE_INTERVAL_SECONDS
+from .privacy import redact_log_value
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -100,24 +101,28 @@ class AnonaDeviceCoordinator(DataUpdateCoordinator[AnonaDeviceSnapshot]):
 
         try:
             online_status = await self._api.get_device_online_status(self._device)
-        except AnonaApiError as err:
+        except (AnonaApiError, TimeoutError) as err:
             _LOGGER.debug(
-                "Fast online poll failed for %s: %s",
-                self._device.device_id,
-                err,
+                "Fast online poll failed for an Anona lock: %s",
+                redact_log_value(
+                    str(err),
+                    extra_values=(self._device.device_id,),
+                ),
             )
 
         try:
             lock_status = await self._api.get_device_status(self._device)
-        except AnonaApiError as err:
+        except (AnonaApiError, TimeoutError) as err:
             _LOGGER.debug(
-                "Fast lock-status poll failed for %s: %s",
-                self._device.device_id,
-                err,
+                "Fast lock-status poll failed for an Anona lock: %s",
+                redact_log_value(
+                    str(err),
+                    extra_values=(self._device.device_id,),
+                ),
             )
 
         if online_status is None and lock_status is None:
-            message = f"Unable to fetch status for {self._device.device_id}"
+            message = "Unable to fetch Anona lock status"
             raise UpdateFailed(message)
 
         now_monotonic = time.monotonic()
@@ -133,11 +138,13 @@ class AnonaDeviceCoordinator(DataUpdateCoordinator[AnonaDeviceSnapshot]):
                 device_info_context = await self._api.get_device_info_context(
                     self._device
                 )
-            except AnonaApiError as err:
+            except (AnonaApiError, TimeoutError) as err:
                 _LOGGER.debug(
-                    "Detail poll getDeviceInfo failed for %s: %s",
-                    self._device.device_id,
-                    err,
+                    "Detail poll getDeviceInfo failed for an Anona lock: %s",
+                    redact_log_value(
+                        str(err),
+                        extra_values=(self._device.device_id,),
+                    ),
                 )
             else:
                 details_refreshed = True
@@ -146,11 +153,13 @@ class AnonaDeviceCoordinator(DataUpdateCoordinator[AnonaDeviceSnapshot]):
                 switch_settings = await self._api.get_device_switch_settings(
                     self._device
                 )
-            except AnonaApiError as err:
+            except (AnonaApiError, TimeoutError) as err:
                 _LOGGER.debug(
-                    "Detail poll getDeviceSwitch failed for %s: %s",
-                    self._device.device_id,
-                    err,
+                    "Detail poll getDeviceSwitch failed for an Anona lock: %s",
+                    redact_log_value(
+                        str(err),
+                        extra_values=(self._device.device_id,),
+                    ),
                 )
                 # Fallback to the list-by-home endpoint when single-device lookup
                 # fails transiently.
@@ -158,11 +167,13 @@ class AnonaDeviceCoordinator(DataUpdateCoordinator[AnonaDeviceSnapshot]):
                     switches_by_device = (
                         await self._api.get_device_switch_list_by_home()
                     )
-                except AnonaApiError as list_err:
+                except (AnonaApiError, TimeoutError) as list_err:
                     _LOGGER.debug(
-                        "Detail poll getDeviceSwitchListByHomeId failed for %s: %s",
-                        self._device.device_id,
-                        list_err,
+                        "Detail poll getDeviceSwitchListByHomeId failed: %s",
+                        redact_log_value(
+                            str(list_err),
+                            extra_values=(self._device.device_id,),
+                        ),
                     )
                 else:
                     maybe_settings = switches_by_device.get(self._device.device_id)
@@ -176,11 +187,13 @@ class AnonaDeviceCoordinator(DataUpdateCoordinator[AnonaDeviceSnapshot]):
                 firmware_update_context = await self._api.get_firmware_update_context(
                     self._device
                 )
-            except AnonaApiError as err:
+            except (AnonaApiError, TimeoutError) as err:
                 _LOGGER.debug(
-                    "Detail poll checkNewRomFromApp failed for %s: %s",
-                    self._device.device_id,
-                    err,
+                    "Detail poll checkNewRomFromApp failed for an Anona lock: %s",
+                    redact_log_value(
+                        str(err),
+                        extra_values=(self._device.device_id,),
+                    ),
                 )
             else:
                 details_refreshed = True

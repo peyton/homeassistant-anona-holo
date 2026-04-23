@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -559,6 +560,27 @@ def test_get_device_status_uses_explicit_device_context() -> None:
         "token": "session-token",
         "sig": FIXTURE["device_status"]["sig"],
     }
+
+
+def test_get_device_status_logs_summary_without_raw_identifiers(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Debug lock-status logs should not include raw device identifiers or payloads."""
+    api, _ = _make_api(
+        [
+            _FakeResponse(_encode_success(FIXTURE["server_ts"])),
+            _FakeResponse(_encode_success(FIXTURE["device_status"]["response_object"])),
+        ],
+        authed=True,
+    )
+    device = normalize_device_context(FIXTURE["device_list"]["response_object"][0])
+
+    caplog.set_level(logging.DEBUG, logger=api_module.__name__)
+    asyncio.run(api.get_device_status(device))
+
+    assert "Decoded Anona lock status" in caplog.text
+    assert "device-123" not in caplog.text
+    assert FIXTURE["device_status"]["response_object"]["dataHexStr"] not in caplog.text
 
 
 def test_get_device_certs_and_websocket_context_normalize_payloads() -> None:

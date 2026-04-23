@@ -5,9 +5,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
+
+import pytest
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.anona_holo.api import (
     AnonaApiError,
@@ -164,5 +168,33 @@ def test_coordinator_keeps_stale_details_when_detail_refresh_fails() -> None:
         assert updated.switch_settings == SWITCH_SETTINGS
         assert updated.firmware_update_context == FIRMWARE_CONTEXT
         api.get_device_switch_list_by_home.assert_awaited_once()
+
+    asyncio.run(_run())
+
+
+def test_coordinator_raises_redacted_update_failed_when_fast_polls_fail(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Unavailable coordinator updates should not expose device identifiers."""
+
+    async def _run() -> None:
+        api = Mock()
+        api.get_device_online_status = AsyncMock(
+            side_effect=AnonaApiError("device-123 is offline")
+        )
+        api.get_device_status = AsyncMock(side_effect=TimeoutError("device-123"))
+
+        coordinator = _coordinator(api)
+
+        caplog.set_level(
+            logging.DEBUG,
+            logger="custom_components.anona_holo.coordinator",
+        )
+        with pytest.raises(UpdateFailed) as err:
+            await coordinator._async_update_data()
+
+        assert str(err.value) == "Unable to fetch Anona lock status"
+        assert "device-123" not in caplog.text
+        assert "**REDACTED** is offline" in caplog.text
 
     asyncio.run(_run())

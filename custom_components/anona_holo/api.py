@@ -47,6 +47,7 @@ from .const import (
     WEBSOCKET_COMMAND_TARGET,
     WEBSOCKET_TIMEOUT_SECONDS,
 )
+from .privacy import redact_log_value
 
 if TYPE_CHECKING:
     import aiohttp
@@ -549,10 +550,11 @@ class AnonaApi:
             start_type=_coerce_int(result_map.get("startType")),
         )
         _LOGGER.debug(
-            "Decoded lock status for %s from dataHexStr=%s into %s",
-            device_context.device_id,
-            data_hex_str,
-            status.raw_fields,
+            "Decoded Anona lock status: locked=%s battery=%s door=%s auto_lock=%s",
+            status.locked,
+            status.battery_capacity,
+            status.door_state_code,
+            status.auto_lock_enabled,
         )
         return status
 
@@ -806,10 +808,8 @@ class AnonaApi:
             )
             await websocket.send_str(encrypted_payload)
             _LOGGER.debug(
-                "Sent websocket command %s for %s with operateId=%s",
+                "Sent Anona websocket command %s and waiting for acknowledgement",
                 send_id,
-                device_context.device_id,
-                operation["operateId"],
             )
             await self._await_websocket_command_result(
                 websocket,
@@ -839,7 +839,9 @@ class AnonaApi:
             or handshake_ack.ack_code != HTTP_STATUS_OK
             or handshake_ack.operate_id != operate_id
         ):
-            message = f"Websocket handshake failed with payload {handshake_ack.raw!r}"
+            message = (
+                f"Websocket handshake failed with ack_code={handshake_ack.ack_code!r}"
+            )
             raise AnonaCommandError(message)
 
     async def _await_websocket_command_result(
@@ -862,22 +864,21 @@ class AnonaApi:
                 if message.operate_id == operate_id:
                     if message.ack_code != HTTP_STATUS_OK:
                         error_message = (
-                            f"Websocket command ack failed with payload {message.raw!r}"
+                            "Websocket command ack failed with "
+                            f"ack_code={message.ack_code!r}"
                         )
                         raise AnonaCommandError(error_message)
                     ack_received = True
                 continue
             if message.operate_id != operate_id:
                 _LOGGER.debug(
-                    "Ignoring websocket push for %s while waiting on %s: %s",
-                    message.device_id,
-                    operate_id,
-                    message.raw,
+                    "Ignoring unrelated Anona websocket push while waiting for "
+                    "command result"
                 )
                 continue
             if message.device_id not in {None, device_id}:
                 error_message = (
-                    f"Websocket command returned a mismatched deviceId: {message.raw!r}"
+                    "Websocket command returned a result for a different device"
                 )
                 raise AnonaCommandError(error_message)
             if not ack_received:
@@ -981,15 +982,16 @@ class AnonaApi:
         envelope = decode_response_envelope(body_text)
         error_code = _coerce_int(envelope.get("errorCode")) or 0
         error_message = _coerce_string(envelope.get("errorMessage")) or "unknown error"
+        safe_error_message = str(redact_log_value(error_message))
         if envelope.get("error") or error_code != 0:
             lowered_message = error_message.lower()
             if "sig" in lowered_message:
-                raise AnonaSignatureError(error_message)
+                raise AnonaSignatureError(safe_error_message)
             if endpoint == ENDPOINT_LOGIN:
-                raise AnonaAuthError(error_message)
+                raise AnonaAuthError(safe_error_message)
             if "token" in lowered_message:
-                raise AnonaAuthError(error_message)
-            message = f"API error {error_code}: {error_message}"
+                raise AnonaAuthError(safe_error_message)
+            message = f"API error {error_code}: {safe_error_message}"
             raise AnonaApiError(message)
         return envelope
 
@@ -1001,10 +1003,7 @@ class AnonaApi:
         try:
             return self._devices_by_id[device]
         except KeyError as err:
-            message = (
-                "No cached device context for "
-                f"{device}; fetch devices before status requests"
-            )
+            message = "No cached device context; fetch devices before status requests"
             raise AnonaApiError(message) from err
 
     def _resolve_device_id(self, device: DeviceContext | str) -> str:
