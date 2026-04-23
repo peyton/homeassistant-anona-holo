@@ -1,0 +1,136 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
+      "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]",
+      "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]",
+      "wrong_account": "The authenticated account does not match the configured Anona Holo account."
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
+    "step": {
+      "user": {
+        "title": "Anona Holo",
+        "description": "Enter your Anona Holo app credentials.",
+        "data": {
+          "email": "Email address",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "[%key:common::config_flow::title::reauth%]",
+        "description": "Re-enter the credentials for {email}.",
+        "data": {
+          "email": "Email address",
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Anona Holo",
+        "description": "Update the saved credentials for {email}.",
+        "data": {
+          "email": "Email address",
+          "password": "Password"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "auto_lock_enabled": {
+        "name": "Auto-lock"
+      },
+      "door_open_too_long": {
+        "name": "Door open too long"
+      },
+      "keypad_connected": {
+        "name": "Keypad connected"
+      },
+      "lock_jam": {
+        "name": "Lock jam"
+      },
+      "low_power_mode": {
+        "name": "Low power mode"
+      },
+      "online": {
+        "name": "Online"
+      }
+    },
+    "sensor": {
+      "auto_lock_delay": {
+        "name": "Auto-lock delay"
+      },
+      "battery_level": {
+        "name": "Battery"
+      },
+      "keypad_battery": {
+        "name": "Keypad battery"
+      },
+      "last_alive": {
+        "name": "Last alive"
+      },
+      "sound_volume": {
+        "name": "Sound volume"
+      }
+    },
+    "switch": {
+      "abnormal_notifications": {
+        "name": "Abnormal notifications"
+      },
+      "allow_notifications": {
+        "name": "Allow notifications"
+      },
+      "event_notifications": {
+        "name": "Event notifications"
+      },
+      "other_notifications": {
+        "name": "Other notifications"
+      },
+      "silent_ota": {
+        "name": "Silent OTA"
+      }
+    },
+    "update": {
+      "firmware": {
+        "name": "Firmware"
+      }
+    }
+  },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Cannot connect to the Anona Holo service."
+    },
+    "invalid_auth": {
+      "message": "Authentication failed."
+    },
+    "lock_command_failed": {
+      "message": "The lock command failed."
+    },
+    "missing_switch_settings": {
+      "message": "Notification settings are not available yet."
+    },
+    "reauth_required": {
+      "message": "Authentication expired. Reconfigure the saved credentials."
+    },
+    "silent_ota_update_failed": {
+      "message": "Updating the Silent OTA setting failed."
+    },
+    "update_switch_failed": {
+      "message": "Updating the notification setting failed."
+    }
+  },
+  "system_health": {
+    "info": {
+      "configured_entries": "Configured entries",
+      "loaded_entries": "Loaded entries",
+      "locks": "Discovered locks",
+      "coordinators": "Active coordinators",
+      "successful_coordinators": "Successful coordinators",
+      "online_locks": "Online locks",
+      "can_reach_server": "Reach Anona API server"
+    }
+  }
+}

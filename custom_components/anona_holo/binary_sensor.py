@@ -12,16 +12,16 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.const import EntityCategory
 
-from .const import DATA_COORDINATORS, DEVICE_TYPE_LOCK, DOMAIN
+from .const import DEVICE_TYPE_LOCK
 from .entity import AnonaHoloCoordinatorEntity
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+    from . import AnonaConfigEntry
     from .coordinator import AnonaDeviceCoordinator, AnonaDeviceSnapshot
 
 
@@ -35,24 +35,27 @@ class AnonaBinarySensorDescription(BinarySensorEntityDescription):
 BINARY_SENSOR_DESCRIPTIONS: tuple[AnonaBinarySensorDescription, ...] = (
     AnonaBinarySensorDescription(
         key="auto_lock_enabled",
-        name="Auto-lock",
+        translation_key="auto_lock_enabled",
         entity_category=EntityCategory.CONFIG,
+        has_entity_name=True,
         value_fn=lambda snapshot: (
             snapshot.lock_status.auto_lock_enabled if snapshot.lock_status else None
         ),
     ),
     AnonaBinarySensorDescription(
         key="lock_jam",
-        name="Lock Jam",
+        translation_key="lock_jam",
         device_class=BinarySensorDeviceClass.PROBLEM,
+        has_entity_name=True,
         value_fn=lambda snapshot: (
             snapshot.lock_status.has_locking_fail if snapshot.lock_status else None
         ),
     ),
     AnonaBinarySensorDescription(
         key="door_open_too_long",
-        name="Door Open Too Long",
+        translation_key="door_open_too_long",
         device_class=BinarySensorDeviceClass.PROBLEM,
+        has_entity_name=True,
         value_fn=lambda snapshot: (
             snapshot.lock_status.has_door_been_open_long_time
             if snapshot.lock_status
@@ -61,9 +64,10 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[AnonaBinarySensorDescription, ...] = (
     ),
     AnonaBinarySensorDescription(
         key="low_power_mode",
-        name="Low Power Mode",
+        translation_key="low_power_mode",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        has_entity_name=True,
         value_fn=lambda snapshot: (
             snapshot.lock_status.low_power_mode_enabled
             if snapshot.lock_status
@@ -72,10 +76,11 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[AnonaBinarySensorDescription, ...] = (
     ),
     AnonaBinarySensorDescription(
         key="keypad_connected",
-        name="Keypad Connected",
+        translation_key="keypad_connected",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        has_entity_name=True,
         value_fn=lambda snapshot: (
             snapshot.lock_status.keypad_connection_status_code > 0
             if snapshot.lock_status
@@ -85,24 +90,26 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[AnonaBinarySensorDescription, ...] = (
     ),
     AnonaBinarySensorDescription(
         key="online",
-        name="Online",
+        translation_key="online",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
+        has_entity_name=True,
         value_fn=lambda snapshot: (
             snapshot.online_status.online if snapshot.online_status else None
         ),
     ),
 )
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
+    _hass: HomeAssistant,
+    entry: AnonaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Anona binary sensors."""
-    entry_data = hass.data[DOMAIN][entry.entry_id]
-    coordinators: dict[str, AnonaDeviceCoordinator] = entry_data[DATA_COORDINATORS]
+    coordinators: dict[str, AnonaDeviceCoordinator] = entry.runtime_data.coordinators
 
     entities: list[AnonaHoloBinarySensor] = []
     for coordinator in coordinators.values():
@@ -127,13 +134,9 @@ class AnonaHoloBinarySensor(  # pyright: ignore[reportIncompatibleVariableOverri
         description: AnonaBinarySensorDescription,
     ) -> None:
         """Initialize the binary sensor."""
-        description_name = (
-            description.name if isinstance(description.name, str) else None
-        )
         super().__init__(
             coordinator,
             unique_suffix=f"binary_sensor_{description.key}",
-            name=description_name,
         )
         self._description = description
         self.entity_description = description

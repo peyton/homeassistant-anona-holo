@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.const import EntityCategory
 from homeassistant.exceptions import HomeAssistantError
 
+from .api import AnonaApiError
 from .const import (
-    DATA_COORDINATORS,
     DEFAULT_SILENT_OTA_TIME_WINDOW,
     DEVICE_TYPE_LOCK,
     DOMAIN,
@@ -18,10 +18,10 @@ from .const import (
 from .entity import AnonaHoloCoordinatorEntity
 
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+    from . import AnonaConfigEntry
     from .api import DeviceInfoContext, DeviceSwitchSettings
     from .coordinator import AnonaDeviceCoordinator
 
@@ -33,47 +33,57 @@ SwitchFieldName = Literal[
 ]
 
 
-@dataclass(slots=True, frozen=True)
-class NotificationSwitchDescription:
+@dataclass(slots=True, frozen=True, kw_only=True)
+class AnonaSwitchDescription(SwitchEntityDescription):
     """Description for writable notification switch entities."""
 
-    key: str
-    name: str
     field_name: SwitchFieldName
 
 
-NOTIFICATION_SWITCHES: tuple[NotificationSwitchDescription, ...] = (
-    NotificationSwitchDescription(
+NOTIFICATION_SWITCHES: tuple[AnonaSwitchDescription, ...] = (
+    AnonaSwitchDescription(
         key="allow_notifications",
-        name="Allow Notifications",
+        translation_key="allow_notifications",
+        has_entity_name=True,
         field_name="main_switch",
     ),
-    NotificationSwitchDescription(
+    AnonaSwitchDescription(
         key="abnormal_notifications",
-        name="Abnormal Notifications",
+        translation_key="abnormal_notifications",
+        has_entity_name=True,
         field_name="ugent_notify_switch",
     ),
-    NotificationSwitchDescription(
+    AnonaSwitchDescription(
         key="event_notifications",
-        name="Event Notifications",
+        translation_key="event_notifications",
+        has_entity_name=True,
         field_name="important_notify_switch",
     ),
-    NotificationSwitchDescription(
+    AnonaSwitchDescription(
         key="other_notifications",
-        name="Other Notifications",
+        translation_key="other_notifications",
+        has_entity_name=True,
         field_name="normal_notify_switch",
     ),
 )
 
+SILENT_OTA_SWITCH = AnonaSwitchDescription(
+    key="silent_ota",
+    translation_key="silent_ota",
+    has_entity_name=True,
+    field_name="main_switch",
+)
+
+PARALLEL_UPDATES = 1
+
 
 async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
+    _hass: HomeAssistant,
+    entry: AnonaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up writable switch entities for an entry."""
-    entry_data = hass.data[DOMAIN][entry.entry_id]
-    coordinators: dict[str, AnonaDeviceCoordinator] = entry_data[DATA_COORDINATORS]
+    coordinators: dict[str, AnonaDeviceCoordinator] = entry.runtime_data.coordinators
 
     entities: list[SwitchEntity] = []
     for coordinator in coordinators.values():
@@ -98,15 +108,15 @@ class AnonaNotificationSwitch(  # pyright: ignore[reportIncompatibleVariableOver
     def __init__(
         self,
         coordinator: AnonaDeviceCoordinator,
-        description: NotificationSwitchDescription,
+        description: AnonaSwitchDescription,
     ) -> None:
         """Initialize the switch."""
         super().__init__(
             coordinator,
             unique_suffix=f"switch_{description.key}",
-            name=description.name,
         )
         self._description = description
+        self.entity_description = description
         self._apply_snapshot()
 
     def _handle_coordinator_update(self) -> None:
@@ -143,13 +153,19 @@ class AnonaNotificationSwitch(  # pyright: ignore[reportIncompatibleVariableOver
         }
         payload[self._description.field_name] = enabled
 
-        await self._api.update_device_switch_settings(
-            self._device,
-            main_switch=payload["main_switch"],
-            ugent_notify_switch=payload["ugent_notify_switch"],
-            important_notify_switch=payload["important_notify_switch"],
-            normal_notify_switch=payload["normal_notify_switch"],
-        )
+        try:
+            await self._api.update_device_switch_settings(
+                self._device,
+                main_switch=payload["main_switch"],
+                ugent_notify_switch=payload["ugent_notify_switch"],
+                important_notify_switch=payload["important_notify_switch"],
+                normal_notify_switch=payload["normal_notify_switch"],
+            )
+        except AnonaApiError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="update_switch_failed",
+            ) from err
         await self.coordinator.async_request_details_refresh()
 
     async def _async_get_switch_settings(self) -> DeviceSwitchSettings:
@@ -161,8 +177,10 @@ class AnonaNotificationSwitch(  # pyright: ignore[reportIncompatibleVariableOver
         await self.coordinator.async_request_details_refresh()
         refreshed_settings = self.snapshot.switch_settings
         if refreshed_settings is None:
-            message = "Missing Anona notification switch settings"
-            raise HomeAssistantError(message)
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="missing_switch_settings",
+            )
         return refreshed_settings
 
 
@@ -179,8 +197,8 @@ class AnonaSilentOTASwitch(  # pyright: ignore[reportIncompatibleVariableOverrid
         super().__init__(
             coordinator,
             unique_suffix="switch_silent_ota",
-            name="Silent OTA",
         )
+        self.entity_description = SILENT_OTA_SWITCH
         self._apply_snapshot()
 
     def _handle_coordinator_update(self) -> None:
@@ -210,11 +228,17 @@ class AnonaSilentOTASwitch(  # pyright: ignore[reportIncompatibleVariableOverrid
             if info_context and info_context.silent_ota_time
             else DEFAULT_SILENT_OTA_TIME_WINDOW
         )
-        await self._api.set_silent_ota(
-            self._device,
-            enabled=enabled,
-            silent_ota_time=silent_ota_time,
-        )
+        try:
+            await self._api.set_silent_ota(
+                self._device,
+                enabled=enabled,
+                silent_ota_time=silent_ota_time,
+            )
+        except AnonaApiError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="silent_ota_update_failed",
+            ) from err
         await self.coordinator.async_request_details_refresh()
 
     async def _async_get_info_context(self) -> DeviceInfoContext | None:

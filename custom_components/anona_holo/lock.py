@@ -6,29 +6,31 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.lock import LockEntity, LockEntityFeature
+from homeassistant.exceptions import HomeAssistantError
 
-from .const import DATA_COORDINATORS, DEVICE_TYPE_LOCK, DOMAIN
+from .api import AnonaApiError, AnonaCommandError
+from .const import DEVICE_TYPE_LOCK, DOMAIN
 from .entity import AnonaHoloCoordinatorEntity
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 1
 
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+    from . import AnonaConfigEntry
     from .api import LockStatus, OnlineStatus
     from .coordinator import AnonaDeviceCoordinator
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
+    _hass: HomeAssistant,
+    entry: AnonaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up lock entities from a config entry."""
-    entry_data = hass.data[DOMAIN][entry.entry_id]
-    coordinators: dict[str, AnonaDeviceCoordinator] = entry_data[DATA_COORDINATORS]
+    coordinators: dict[str, AnonaDeviceCoordinator] = entry.runtime_data.coordinators
 
     entities = [
         AnonaHoloLock(coordinator)
@@ -80,12 +82,34 @@ class AnonaHoloLock(  # pyright: ignore[reportIncompatibleVariableOverride]
 
     async def async_lock(self, **_: Any) -> None:
         """Attempt to lock the device through the command path."""
-        await self._api.lock(self._device)
+        try:
+            await self._api.lock(self._device)
+        except AnonaCommandError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="lock_command_failed",
+            ) from err
+        except AnonaApiError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="cannot_connect",
+            ) from err
         await self.coordinator.async_request_refresh()
 
     async def async_unlock(self, **_: Any) -> None:
         """Attempt to unlock the device through the command path."""
-        await self._api.unlock(self._device)
+        try:
+            await self._api.unlock(self._device)
+        except AnonaCommandError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="lock_command_failed",
+            ) from err
+        except AnonaApiError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="cannot_connect",
+            ) from err
         await self.coordinator.async_request_refresh()
 
 
@@ -97,41 +121,13 @@ def _build_attrs(
     """Build the lock attribute mapping from the latest status objects."""
     attrs: dict[str, Any] = {
         "device_id": device.device_id,
-        "device_type": device.device_type,
-        "device_module": device.device_module,
-        "device_channel": device.device_channel,
         "serial_number": device.serial_number,
         "model": device.model,
     }
     if online_status is not None:
         attrs["online"] = online_status.online
-        attrs["create_ts"] = online_status.create_ts
-        attrs["last_alive_ts"] = online_status.last_alive_ts
     if lock_status is not None:
-        attrs["raw_data_hex_str"] = lock_status.data_hex_str
-        attrs["raw_status_fields"] = lock_status.raw_fields
         attrs["lock_status_code"] = lock_status.lock_status_code
         attrs["door_state_code"] = lock_status.door_state_code
         attrs["door_status_code"] = lock_status.door_status_code
-        attrs["has_locking_fail"] = lock_status.has_locking_fail
-        attrs["has_door_been_open_long_time"] = lock_status.has_door_been_open_long_time
-        attrs["auto_lock_enabled"] = lock_status.auto_lock_enabled
-        attrs["auto_lock_delay_seconds"] = lock_status.auto_lock_delay_seconds
-        attrs["auto_lock_delay_label"] = lock_status.auto_lock_delay_label
-        attrs["sound_volume"] = lock_status.sound_volume
-        attrs["sound_volume_code"] = lock_status.sound_volume_code
-        attrs["low_power_mode_enabled"] = lock_status.low_power_mode_enabled
-        attrs["long_endurance_mode_status_code"] = (
-            lock_status.long_endurance_mode_status_code
-        )
-        attrs["keypad_connection_status_code"] = (
-            lock_status.keypad_connection_status_code
-        )
-        attrs["keypad_battery_capacity"] = lock_status.keypad_battery_capacity
-        attrs["keypad_status_code"] = lock_status.keypad_status_code
-        attrs["refresh_ts"] = lock_status.refresh_ts
-        attrs["start_type"] = lock_status.start_type
-        if lock_status.battery_capacity is not None:
-            attrs["battery_level"] = lock_status.battery_capacity
-            attrs["lock_battery_capacity"] = lock_status.battery_capacity
     return attrs

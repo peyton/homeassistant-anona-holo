@@ -1,6 +1,6 @@
 """Runtime lifecycle tests for the Anona Holo Home Assistant integration."""
 
-# ruff: noqa: S101, S106, PLR2004
+# ruff: noqa: S101, S106
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -35,7 +35,6 @@ from custom_components.anona_holo.const import (
     CONF_HOME_ID,
     CONF_PASSWORD,
     CONF_USER_ID,
-    DATA_API,
     DEVICE_TYPE_LOCK,
     DOMAIN,
 )
@@ -51,6 +50,7 @@ def _make_entry() -> MockConfigEntry:
     """Build a config entry fixture for runtime setup tests."""
     return MockConfigEntry(
         domain=DOMAIN,
+        unique_id="user@example.com",
         version=2,
         data={
             CONF_EMAIL: "user@example.com",
@@ -93,6 +93,7 @@ def _other_device() -> DeviceContext:
 def _build_fake_api(
     *,
     login_error: Exception | None = None,
+    online_error: Exception | None = None,
 ) -> Mock:
     """Create an API double with async methods used by integration runtime tests."""
     api = Mock()
@@ -130,14 +131,17 @@ def _build_fake_api(
     api.get_device_switch_list_by_home = AsyncMock(
         return_value={"device-123": default_switch_settings}
     )
-    api.get_device_online_status = AsyncMock(
-        return_value=OnlineStatus(
-            online=True,
-            create_ts=1775103001462,
-            last_alive_ts=None,
-            raw={"online": True},
+    if online_error is None:
+        api.get_device_online_status = AsyncMock(
+            return_value=OnlineStatus(
+                online=True,
+                create_ts=1775103001462,
+                last_alive_ts=None,
+                raw={"online": True},
+            )
         )
-    )
+    else:
+        api.get_device_online_status = AsyncMock(side_effect=online_error)
     api.get_device_status = AsyncMock(
         return_value=LockStatus(
             locked=True,
@@ -225,7 +229,9 @@ async def test_runtime_setup_creates_entity_and_routes_lock_services(
 
     assert entry.state is ConfigEntryState.LOADED
     assert entry.data[CONF_USER_ID] == "fresh-user-id"
-    assert hass.data[DOMAIN][entry.entry_id][DATA_API] is fake_api
+    assert entry.runtime_data.api is fake_api
+    assert entry.runtime_data.devices == {"device-123": lock_device}
+    assert set(entry.runtime_data.coordinators) == {"device-123"}
     fake_api.login.assert_awaited_once_with("user@example.com", "super-secret")
 
     lock_states = hass.states.async_all(LOCK_DOMAIN)
@@ -234,7 +240,7 @@ async def test_runtime_setup_creates_entity_and_routes_lock_services(
     entity_id = state.entity_id
     assert state.state == LOCKED_STATE
     assert state.attributes["device_id"] == "device-123"
-    assert state.attributes["battery_level"] == 100
+    assert "battery_level" not in state.attributes
     assert hass.states.get("lock.ignored_sensor") is None
 
     await hass.services.async_call(
@@ -257,7 +263,7 @@ async def test_runtime_setup_creates_entity_and_routes_lock_services(
     await hass.async_block_till_done()
 
     assert entry.state is ConfigEntryState.NOT_LOADED
-    assert entry.entry_id not in hass.data.get(DOMAIN, {})
+    assert not hasattr(entry, "runtime_data")
 
 
 @pytest.mark.asyncio
@@ -295,6 +301,7 @@ async def test_runtime_reload_keeps_one_device_and_stable_unique_ids(
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
+        assert not hasattr(entry, "runtime_data")
 
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
@@ -353,3 +360,32 @@ async def test_async_setup_entry_maps_timeout_to_config_entry_not_ready(
         pytest.raises(ConfigEntryNotReady),
     ):
         await integration_async_setup_entry(hass, entry)
+
+
+@pytest.mark.asyncio
+async def test_setup_entry_maps_coordinator_auth_error_to_config_entry_auth_failed(
+    hass: HomeAssistant,
+) -> None:
+    """Auth errors during the first coordinator refresh should trigger reauth."""
+    entry = _make_entry()
+    entry.add_to_hass(hass)
+    fake_api = _build_fake_api(online_error=AnonaAuthError("session expired"))
+
+    with patch("custom_components.anona_holo.AnonaApi", return_value=fake_api):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    def _is_reauth_flow(flow: object) -> bool:
+        if not isinstance(flow, dict):
+            return False
+        context = flow.get("context")
+        return isinstance(context, dict) and (
+            context.get("source") == SOURCE_REAUTH
+            and context.get("entry_id") == entry.entry_id
+        )
+
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert any(
+        _is_reauth_flow(flow)
+        for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    )

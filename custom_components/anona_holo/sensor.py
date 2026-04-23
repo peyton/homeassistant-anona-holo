@@ -14,17 +14,17 @@ from homeassistant.components.sensor import (
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.util import dt as dt_util
 
-from .const import DATA_COORDINATORS, DEVICE_TYPE_LOCK, DOMAIN
+from .const import DEVICE_TYPE_LOCK
 from .entity import AnonaHoloCoordinatorEntity
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
 
-    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+    from . import AnonaConfigEntry
     from .coordinator import AnonaDeviceCoordinator, AnonaDeviceSnapshot
 
 
@@ -38,20 +38,22 @@ class AnonaSensorDescription(SensorEntityDescription):
 SENSOR_DESCRIPTIONS: tuple[AnonaSensorDescription, ...] = (
     AnonaSensorDescription(
         key="battery_level",
-        name="Battery",
+        translation_key="battery_level",
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        has_entity_name=True,
         value_fn=lambda snapshot: (
             snapshot.lock_status.battery_capacity if snapshot.lock_status else None
         ),
     ),
     AnonaSensorDescription(
         key="auto_lock_delay",
-        name="Auto-lock Delay",
+        translation_key="auto_lock_delay",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         entity_category=EntityCategory.CONFIG,
+        has_entity_name=True,
         value_fn=lambda snapshot: (
             snapshot.lock_status.auto_lock_delay_seconds
             if snapshot.lock_status
@@ -60,22 +62,24 @@ SENSOR_DESCRIPTIONS: tuple[AnonaSensorDescription, ...] = (
     ),
     AnonaSensorDescription(
         key="sound_volume",
-        name="Sound Volume",
+        translation_key="sound_volume",
         device_class=SensorDeviceClass.ENUM,
         entity_category=EntityCategory.CONFIG,
         options=["High", "Low"],
+        has_entity_name=True,
         value_fn=lambda snapshot: (
             snapshot.lock_status.sound_volume if snapshot.lock_status else None
         ),
     ),
     AnonaSensorDescription(
         key="keypad_battery",
-        name="Keypad Battery",
+        translation_key="keypad_battery",
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        has_entity_name=True,
         value_fn=lambda snapshot: (
             snapshot.lock_status.keypad_battery_capacity
             if snapshot.lock_status
@@ -84,25 +88,27 @@ SENSOR_DESCRIPTIONS: tuple[AnonaSensorDescription, ...] = (
     ),
     AnonaSensorDescription(
         key="last_alive",
-        name="Last Alive",
+        translation_key="last_alive",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        has_entity_name=True,
         value_fn=lambda snapshot: _ts_to_datetime(
             snapshot.online_status.last_alive_ts if snapshot.online_status else None
         ),
     ),
 )
 
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
+    _hass: HomeAssistant,
+    entry: AnonaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Anona telemetry sensors."""
-    entry_data = hass.data[DOMAIN][entry.entry_id]
-    coordinators: dict[str, AnonaDeviceCoordinator] = entry_data[DATA_COORDINATORS]
+    coordinators: dict[str, AnonaDeviceCoordinator] = entry.runtime_data.coordinators
 
     entities: list[AnonaHoloSensor] = []
     for coordinator in coordinators.values():
@@ -127,13 +133,9 @@ class AnonaHoloSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
         description: AnonaSensorDescription,
     ) -> None:
         """Initialize the sensor."""
-        description_name = (
-            description.name if isinstance(description.name, str) else None
-        )
         super().__init__(
             coordinator,
             unique_suffix=f"sensor_{description.key}",
-            name=description_name,
         )
         self._description = description
         self.entity_description = description

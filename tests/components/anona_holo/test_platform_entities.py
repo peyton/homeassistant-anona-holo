@@ -21,14 +21,31 @@ from custom_components.anona_holo.binary_sensor import (
     BINARY_SENSOR_DESCRIPTIONS,
     AnonaHoloBinarySensor,
 )
+from custom_components.anona_holo.binary_sensor import (
+    PARALLEL_UPDATES as BINARY_SENSOR_PARALLEL_UPDATES,
+)
 from custom_components.anona_holo.coordinator import AnonaDeviceSnapshot
-from custom_components.anona_holo.sensor import SENSOR_DESCRIPTIONS, AnonaHoloSensor
+from custom_components.anona_holo.sensor import (
+    PARALLEL_UPDATES as SENSOR_PARALLEL_UPDATES,
+)
+from custom_components.anona_holo.sensor import (
+    SENSOR_DESCRIPTIONS,
+    AnonaHoloSensor,
+)
 from custom_components.anona_holo.switch import (
     NOTIFICATION_SWITCHES,
     AnonaNotificationSwitch,
     AnonaSilentOTASwitch,
 )
-from custom_components.anona_holo.update import AnonaHoloFirmwareUpdate
+from custom_components.anona_holo.switch import (
+    PARALLEL_UPDATES as SWITCH_PARALLEL_UPDATES,
+)
+from custom_components.anona_holo.update import (
+    PARALLEL_UPDATES as UPDATE_PARALLEL_UPDATES,
+)
+from custom_components.anona_holo.update import (
+    AnonaHoloFirmwareUpdate,
+)
 
 LOCK_DEVICE = DeviceContext(
     device_id="device-123",
@@ -206,6 +223,10 @@ def test_sensor_and_binary_sensor_state_mapping() -> None:
     assert auto_lock_sensor.is_on is True
     assert jam_sensor.is_on is False
     assert low_power_sensor.is_on is True
+    assert battery_sensor.translation_key == "battery_level"
+    assert auto_lock_sensor.translation_key == "auto_lock_enabled"
+    assert battery_sensor.entity_description.translation_key == "battery_level"
+    assert auto_lock_sensor.entity_description.translation_key == "auto_lock_enabled"
 
 
 def test_notification_switch_merges_payload_for_update_device_switch() -> None:
@@ -261,3 +282,22 @@ def test_update_entity_exposes_firmware_metadata() -> None:
     assert entity.release_summary == "notes"
     assert entity.release_url == "https://example.com/fw.bin"
     assert entity.available is True
+    assert entity.translation_key == "firmware"
+
+
+def test_platform_parallel_updates_are_explicit() -> None:
+    """Coordinator-backed platforms should declare parallel update behavior."""
+    assert SENSOR_PARALLEL_UPDATES == 0
+    assert BINARY_SENSOR_PARALLEL_UPDATES == 0
+    assert SWITCH_PARALLEL_UPDATES == 1
+    assert UPDATE_PARALLEL_UPDATES == 0
+
+
+def test_switch_descriptions_use_translation_keys() -> None:
+    """Writable switches should use translation keys instead of hard-coded names."""
+    description = next(
+        item for item in NOTIFICATION_SWITCHES if item.key == "allow_notifications"
+    )
+
+    assert description.translation_key == "allow_notifications"
+    assert description.has_entity_name is True

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast
 
+from custom_components.anona_holo import AnonaHoloRuntimeData
 from custom_components.anona_holo.api import (
     DeviceContext,
     DeviceInfoContext,
@@ -23,10 +24,6 @@ from custom_components.anona_holo.const import (
     CONF_EMAIL,
     CONF_HOME_ID,
     CONF_PASSWORD,
-    DATA_API,
-    DATA_COORDINATORS,
-    DATA_DEVICES,
-    DOMAIN,
 )
 from custom_components.anona_holo.coordinator import AnonaDeviceSnapshot
 from custom_components.anona_holo.diagnostics import (
@@ -147,20 +144,16 @@ def test_diagnostics_redacts_sensitive_fields() -> None:
             CONF_CLIENT_UUID: "D15AF65C-BCF6-49B1-8A67-3A15793A11CE",
         },
         options={},
+        runtime_data=AnonaHoloRuntimeData(
+            api=cast("Any", api),
+            devices={device.device_id: device},
+            coordinators=cast(
+                "Any",
+                {device.device_id: _FakeCoordinator(data=snapshot)},
+            ),
+        ),
     )
-    hass = SimpleNamespace(
-        data={
-            DOMAIN: {
-                "entry-1": {
-                    DATA_API: api,
-                    DATA_DEVICES: {device.device_id: device},
-                    DATA_COORDINATORS: {
-                        device.device_id: _FakeCoordinator(data=snapshot)
-                    },
-                }
-            }
-        }
-    )
+    hass = SimpleNamespace()
 
     diagnostics: dict[str, Any] = asyncio.run(
         async_get_config_entry_diagnostics(cast("Any", hass), cast("Any", entry))
@@ -228,25 +221,23 @@ def test_device_diagnostics_are_scoped_to_the_requested_device() -> None:
         title="Anona Holo",
         data={},
         options={},
+        runtime_data=AnonaHoloRuntimeData(
+            api=cast("Any", None),
+            devices={
+                device.device_id: device,
+                other_device.device_id: other_device,
+            },
+            coordinators=cast(
+                "Any",
+                {
+                    device.device_id: _FakeCoordinator(data=snapshot),
+                    other_device.device_id: _FakeCoordinator(data=other_snapshot),
+                },
+            ),
+        ),
     )
-    hass = SimpleNamespace(
-        data={
-            DOMAIN: {
-                "entry-1": {
-                    DATA_API: None,
-                    DATA_DEVICES: {
-                        device.device_id: device,
-                        other_device.device_id: other_device,
-                    },
-                    DATA_COORDINATORS: {
-                        device.device_id: _FakeCoordinator(data=snapshot),
-                        other_device.device_id: _FakeCoordinator(data=other_snapshot),
-                    },
-                }
-            }
-        }
-    )
-    device_entry = SimpleNamespace(identifiers={(DOMAIN, device.device_id)})
+    hass = SimpleNamespace()
+    device_entry = SimpleNamespace(identifiers={("anona_holo", device.device_id)})
 
     diagnostics: dict[str, Any] = asyncio.run(
         async_get_device_diagnostics(

@@ -5,18 +5,19 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from .const import DATA_API, DATA_COORDINATORS, DATA_DEVICES, DOMAIN
+from .const import DOMAIN
 from .privacy import redact_data
 
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.device_registry import DeviceEntry
+
+    from . import AnonaConfigEntry, AnonaHoloRuntimeData
 
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: AnonaConfigEntry,
 ) -> dict[str, Any]:
     """Return diagnostics data for a config entry."""
     return _build_diagnostics(hass, entry)
@@ -24,7 +25,7 @@ async def async_get_config_entry_diagnostics(
 
 async def async_get_device_diagnostics(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: AnonaConfigEntry,
     device: DeviceEntry,
 ) -> dict[str, Any]:
     """Return diagnostics data for a device entry."""
@@ -38,15 +39,19 @@ async def async_get_device_diagnostics(
 
 def _build_diagnostics(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: AnonaConfigEntry,
     *,
     device_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """Return redacted diagnostics for an entry or a subset of its devices."""
-    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
-    coordinators = entry_data.get(DATA_COORDINATORS, {})
-    api = entry_data.get(DATA_API)
-    devices = entry_data.get(DATA_DEVICES, {})
+    del hass
+    runtime_data = cast(
+        "AnonaHoloRuntimeData | None",
+        getattr(entry, "runtime_data", None),
+    )
+    coordinators = runtime_data.coordinators if runtime_data is not None else {}
+    api = runtime_data.api if runtime_data is not None else None
+    devices = runtime_data.devices if runtime_data is not None else {}
 
     diagnostics: dict[str, Any] = {
         "entry": {
