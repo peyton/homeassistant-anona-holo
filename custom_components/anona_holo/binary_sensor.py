@@ -34,6 +34,14 @@ class AnonaBinarySensorDescription(BinarySensorEntityDescription):
 
 BINARY_SENSOR_DESCRIPTIONS: tuple[AnonaBinarySensorDescription, ...] = (
     AnonaBinarySensorDescription(
+        key="auto_lock_enabled",
+        name="Auto-lock",
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda snapshot: (
+            snapshot.lock_status.auto_lock_enabled if snapshot.lock_status else None
+        ),
+    ),
+    AnonaBinarySensorDescription(
         key="lock_jam",
         name="Lock Jam",
         device_class=BinarySensorDeviceClass.PROBLEM,
@@ -57,9 +65,8 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[AnonaBinarySensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         value_fn=lambda snapshot: (
-            snapshot.lock_status.long_endurance_mode_status_code > 0
+            snapshot.lock_status.low_power_mode_enabled
             if snapshot.lock_status
-            and snapshot.lock_status.long_endurance_mode_status_code is not None
             else None
         ),
     ),

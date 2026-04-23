@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfElectricPotential
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.util import dt as dt_util
 
 from .const import DATA_COORDINATORS, DEVICE_TYPE_LOCK, DOMAIN
@@ -47,17 +47,25 @@ SENSOR_DESCRIPTIONS: tuple[AnonaSensorDescription, ...] = (
         ),
     ),
     AnonaSensorDescription(
-        key="battery_voltage",
-        name="Battery Voltage",
-        device_class=SensorDeviceClass.VOLTAGE,
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        key="auto_lock_delay",
+        name="Auto-lock Delay",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        entity_category=EntityCategory.CONFIG,
         value_fn=lambda snapshot: (
-            (snapshot.lock_status.battery_voltage / 100)
-            if snapshot.lock_status and snapshot.lock_status.battery_voltage is not None
+            snapshot.lock_status.auto_lock_delay_seconds
+            if snapshot.lock_status
             else None
+        ),
+    ),
+    AnonaSensorDescription(
+        key="sound_volume",
+        name="Sound Volume",
+        device_class=SensorDeviceClass.ENUM,
+        entity_category=EntityCategory.CONFIG,
+        options=["High", "Low"],
+        value_fn=lambda snapshot: (
+            snapshot.lock_status.sound_volume if snapshot.lock_status else None
         ),
     ),
     AnonaSensorDescription(

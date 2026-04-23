@@ -50,13 +50,13 @@ LOCK_STATUS = LockStatus(
     locked=True,
     lock_status_code=1,
     battery_capacity=95,
-    battery_voltage=180,
-    charge_status_code=1,
+    battery_voltage=None,
+    charge_status_code=None,
     door_state_code=1,
     door_status_code=1,
     has_locking_fail=False,
     has_door_been_open_long_time=True,
-    calibration_status_code=2,
+    calibration_status_code=None,
     long_endurance_mode_status_code=1,
     keypad_connection_status_code=1,
     keypad_battery_capacity=80,
@@ -65,6 +65,12 @@ LOCK_STATUS = LockStatus(
     refresh_ts=1775103452000,
     start_type=48,
     raw_fields={"1": 1},
+    auto_lock_enabled=True,
+    auto_lock_delay_seconds=180,
+    auto_lock_delay_label="3 minutes",
+    sound_volume_code=2,
+    sound_volume="High",
+    low_power_mode_enabled=True,
 )
 DEVICE_INFO = DeviceInfoContext(
     device_id="device-123",
@@ -145,25 +151,59 @@ def test_sensor_and_binary_sensor_state_mapping() -> None:
     """New sensor and binary sensor entities should map coordinator snapshot values."""
     coordinator = _coordinator()
 
+    auto_lock_delay_description = next(
+        item for item in SENSOR_DESCRIPTIONS if item.key == "auto_lock_delay"
+    )
+    sound_volume_description = next(
+        item for item in SENSOR_DESCRIPTIONS if item.key == "sound_volume"
+    )
+    keypad_battery_description = next(
+        item for item in SENSOR_DESCRIPTIONS if item.key == "keypad_battery"
+    )
+    auto_lock_description = next(
+        item for item in BINARY_SENSOR_DESCRIPTIONS if item.key == "auto_lock_enabled"
+    )
+    jam_description = next(
+        item for item in BINARY_SENSOR_DESCRIPTIONS if item.key == "lock_jam"
+    )
+    low_power_description = next(
+        item for item in BINARY_SENSOR_DESCRIPTIONS if item.key == "low_power_mode"
+    )
+
     battery_sensor = AnonaHoloSensor(
         cast("Any", coordinator),
         SENSOR_DESCRIPTIONS[0],
     )
+    auto_lock_delay_sensor = AnonaHoloSensor(
+        cast("Any", coordinator),
+        auto_lock_delay_description,
+    )
+    sound_volume_sensor = AnonaHoloSensor(
+        cast("Any", coordinator),
+        sound_volume_description,
+    )
     keypad_sensor = AnonaHoloSensor(
         cast("Any", coordinator),
-        SENSOR_DESCRIPTIONS[2],
+        keypad_battery_description,
+    )
+    auto_lock_sensor = AnonaHoloBinarySensor(
+        cast("Any", coordinator),
+        auto_lock_description,
     )
     jam_sensor = AnonaHoloBinarySensor(
         cast("Any", coordinator),
-        BINARY_SENSOR_DESCRIPTIONS[0],
+        jam_description,
     )
     low_power_sensor = AnonaHoloBinarySensor(
         cast("Any", coordinator),
-        BINARY_SENSOR_DESCRIPTIONS[2],
+        low_power_description,
     )
 
     assert battery_sensor.native_value == 95
+    assert auto_lock_delay_sensor.native_value == 180
+    assert sound_volume_sensor.native_value == "High"
     assert keypad_sensor.native_value == 80
+    assert auto_lock_sensor.is_on is True
     assert jam_sensor.is_on is False
     assert low_power_sensor.is_on is True
 

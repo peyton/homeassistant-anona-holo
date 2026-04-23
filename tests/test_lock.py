@@ -55,13 +55,13 @@ LOCK_STATUS = LockStatus(
     locked=True,
     lock_status_code=1,
     battery_capacity=100,
-    battery_voltage=180,
-    charge_status_code=1,
+    battery_voltage=None,
+    charge_status_code=None,
     door_state_code=1,
     door_status_code=1,
     has_locking_fail=False,
     has_door_been_open_long_time=False,
-    calibration_status_code=2,
+    calibration_status_code=None,
     long_endurance_mode_status_code=0,
     keypad_connection_status_code=1,
     keypad_battery_capacity=1,
@@ -70,6 +70,12 @@ LOCK_STATUS = LockStatus(
     refresh_ts=1775103452000,
     start_type=48,
     raw_fields={"1": 1, "3": {"1": {"1": 100}}},
+    auto_lock_enabled=True,
+    auto_lock_delay_seconds=180,
+    auto_lock_delay_label="3 minutes",
+    sound_volume_code=2,
+    sound_volume="High",
+    low_power_mode_enabled=False,
 )
 
 
@@ -118,9 +124,11 @@ def test_lock_entity_maps_snapshot_and_dispatches_commands() -> None:
     assert entity.is_locked is True
     assert entity.available is True
     assert attrs["battery_level"] == 100
-    assert attrs["battery_voltage"] == 180
-    assert attrs["charge_status_code"] == 1
     assert attrs["door_state_code"] == 1
+    assert attrs["auto_lock_enabled"] is True
+    assert attrs["auto_lock_delay_seconds"] == 180
+    assert attrs["auto_lock_delay_label"] == "3 minutes"
+    assert attrs["sound_volume"] == "High"
     assert attrs["long_endurance_mode_status_code"] == 0
     assert attrs["raw_data_hex_str"] == "deadbeef"
     assert attrs["device_id"] == "device-123"

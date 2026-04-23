@@ -115,8 +115,12 @@ def _build_attrs(
         attrs["door_status_code"] = lock_status.door_status_code
         attrs["has_locking_fail"] = lock_status.has_locking_fail
         attrs["has_door_been_open_long_time"] = lock_status.has_door_been_open_long_time
-        attrs["calibration_status_code"] = lock_status.calibration_status_code
-        attrs["charge_status_code"] = lock_status.charge_status_code
+        attrs["auto_lock_enabled"] = lock_status.auto_lock_enabled
+        attrs["auto_lock_delay_seconds"] = lock_status.auto_lock_delay_seconds
+        attrs["auto_lock_delay_label"] = lock_status.auto_lock_delay_label
+        attrs["sound_volume"] = lock_status.sound_volume
+        attrs["sound_volume_code"] = lock_status.sound_volume_code
+        attrs["low_power_mode_enabled"] = lock_status.low_power_mode_enabled
         attrs["long_endurance_mode_status_code"] = (
             lock_status.long_endurance_mode_status_code
         )
@@ -130,6 +134,4 @@ def _build_attrs(
         if lock_status.battery_capacity is not None:
             attrs["battery_level"] = lock_status.battery_capacity
             attrs["lock_battery_capacity"] = lock_status.battery_capacity
-        if lock_status.battery_voltage is not None:
-            attrs["battery_voltage"] = lock_status.battery_voltage
     return attrs

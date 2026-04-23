@@ -66,6 +66,19 @@ SILENT_OTA_WINDOW_PATTERN = re.compile(
     r"^(?P<begin_hour>\d{1,2}):(?P<begin_minute>\d{2})-(?P<end_hour>\d{1,2}):(?P<end_minute>\d{2})$"
 )
 VERSION_TOKEN_PATTERN = re.compile(r"[A-Za-z]+|\d+")
+AUTO_LOCK_DELAY_LABELS: dict[int, str] = {
+    0: "No delay",
+    5: "5 seconds",
+    10: "10 seconds",
+    15: "15 seconds",
+    30: "30 seconds",
+    60: "1 minute",
+    180: "3 minutes",
+}
+SOUND_VOLUME_LABELS: dict[int, str] = {
+    1: "Low",
+    2: "High",
+}
 
 type DecodedProtoValue = int | dict[str, DecodedProtoValue] | list[DecodedProtoValue]
 
@@ -156,6 +169,12 @@ class LockStatus:
     refresh_ts: int | None
     start_type: int | None
     raw_fields: dict[str, DecodedProtoValue]
+    auto_lock_enabled: bool | None = None
+    auto_lock_delay_seconds: int | None = None
+    auto_lock_delay_label: str | None = None
+    sound_volume_code: int | None = None
+    sound_volume: str | None = None
+    low_power_mode_enabled: bool | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -1443,17 +1462,18 @@ def parse_lock_status(
     raw_fields = _decode_protobuf_message(raw_bytes)
     lock_status_code = _nested_int(raw_fields, "1")
     battery_capacity = _nested_int(raw_fields, "3", "1", "1")
-    charge_status_code = _nested_int(raw_fields, "11", "1")
-    battery_voltage = _nested_int(raw_fields, "11", "2")
     door_state_code = _nested_int(raw_fields, "2")
     door_status_code = _nested_int(raw_fields, "4")
     has_locking_fail = _optional_bool(_nested_int(raw_fields, "5"))
     has_door_been_open_long_time = _optional_bool(_nested_int(raw_fields, "6"))
-    calibration_status_code = _nested_int(raw_fields, "10", "1")
     long_endurance_mode_status_code = _nested_int(raw_fields, "12", "1")
     keypad_connection_status_code = _nested_int(raw_fields, "15", "1")
     keypad_battery_capacity = _nested_int(raw_fields, "14", "2")
     keypad_status_code = _nested_int(raw_fields, "17", "1")
+    sound_volume_code = _nested_int(raw_fields, "10", "1")
+    auto_lock_enabled = _optional_bool(_nested_int(raw_fields, "11", "1"))
+    auto_lock_delay_seconds = _nested_int(raw_fields, "11", "2")
+    low_power_mode_enabled = _optional_bool(long_endurance_mode_status_code)
 
     locked: bool | None = None
     if lock_status_code == 1:
@@ -1465,13 +1485,13 @@ def parse_lock_status(
         locked=locked,
         lock_status_code=lock_status_code,
         battery_capacity=battery_capacity,
-        battery_voltage=battery_voltage,
-        charge_status_code=charge_status_code,
+        battery_voltage=None,
+        charge_status_code=None,
         door_state_code=door_state_code,
         door_status_code=door_status_code,
         has_locking_fail=has_locking_fail,
         has_door_been_open_long_time=has_door_been_open_long_time,
-        calibration_status_code=calibration_status_code,
+        calibration_status_code=None,
         long_endurance_mode_status_code=long_endurance_mode_status_code,
         keypad_connection_status_code=keypad_connection_status_code,
         keypad_battery_capacity=keypad_battery_capacity,
@@ -1480,7 +1500,27 @@ def parse_lock_status(
         refresh_ts=refresh_ts,
         start_type=start_type,
         raw_fields=raw_fields,
+        auto_lock_enabled=auto_lock_enabled,
+        auto_lock_delay_seconds=auto_lock_delay_seconds,
+        auto_lock_delay_label=describe_auto_lock_delay(auto_lock_delay_seconds),
+        sound_volume_code=sound_volume_code,
+        sound_volume=describe_sound_volume(sound_volume_code),
+        low_power_mode_enabled=low_power_mode_enabled,
     )
+
+
+def describe_auto_lock_delay(value: int | None) -> str | None:
+    """Return a human-readable auto-lock delay label for a raw seconds value."""
+    if value is None:
+        return None
+    return AUTO_LOCK_DELAY_LABELS.get(value, f"{value} seconds")
+
+
+def describe_sound_volume(code: int | None) -> str | None:
+    """Return a human-readable sound volume label for a raw enum code."""
+    if code is None:
+        return None
+    return SOUND_VOLUME_LABELS.get(code)
 
 
 def _decode_base64_json(base64_text: str) -> dict[str, Any]:
