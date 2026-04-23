@@ -1,5 +1,7 @@
 """Anona Holo API client aligned with the captured mobile app traffic."""
 
+# ruff: noqa: ERA001
+
 from __future__ import annotations
 
 import asyncio
@@ -1034,7 +1036,8 @@ def hash_password(password: str) -> str:
 def _md5_hex(value: str) -> str:
     """Return the lowercase MD5 hex digest for a string value."""
     # The upstream Anona mobile API requires MD5 for login and request signatures.
-    # codeql[py/weak-sensitive-data-hashing]  # noqa: ERA001
+
+    # codeql[py/weak-sensitive-data-hashing]
     return hashlib.md5(
         value.encode(),
         usedforsecurity=False,
