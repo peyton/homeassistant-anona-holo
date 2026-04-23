@@ -23,6 +23,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import AnonaDeviceCoordinator
+from .privacy import redact_log_value
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -56,9 +57,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await api.get_homes()
         all_devices = await api.get_all_devices()
     except AnonaAuthError as err:
-        raise ConfigEntryAuthFailed(str(err)) from err
+        raise ConfigEntryAuthFailed(
+            str(
+                redact_log_value(
+                    str(err),
+                    extra_values=(entry.data.get(CONF_EMAIL),),
+                )
+            )
+        ) from err
     except (AnonaApiError, TimeoutError) as err:
-        raise ConfigEntryNotReady(str(err)) from err
+        raise ConfigEntryNotReady(
+            str(
+                redact_log_value(
+                    str(err),
+                    extra_values=(
+                        entry.data.get(CONF_EMAIL),
+                        entry.data.get(CONF_HOME_ID),
+                        entry.data.get(CONF_USER_ID),
+                        entry.data.get(CONF_CLIENT_UUID),
+                    ),
+                )
+            )
+        ) from err
 
     updated_data = dict(entry.data)
     updated_data[CONF_USER_ID] = login_context.user_id
@@ -75,8 +95,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         switch_settings_by_device_id = await api.get_device_switch_list_by_home()
-    except AnonaApiError as err:
-        _LOGGER.debug("Initial getDeviceSwitchListByHomeId preload failed: %s", err)
+    except (AnonaApiError, TimeoutError) as err:
+        _LOGGER.debug(
+            "Initial getDeviceSwitchListByHomeId preload failed: %s",
+            redact_log_value(
+                str(err),
+                extra_values=(api.home_id, api.user_id, api.client_uuid),
+            ),
+        )
         switch_settings_by_device_id = {}
 
     coordinators: dict[str, AnonaDeviceCoordinator] = {}
@@ -92,7 +118,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await coordinator.async_config_entry_first_refresh()
         except (AnonaApiError, TimeoutError) as err:
             raise ConfigEntryNotReady(
-                f"Failed initial refresh for {device.device_id}: {err}"
+                "Failed initial Anona lock refresh: "
+                f"{redact_log_value(str(err), extra_values=(device.device_id,))}"
             ) from err
         coordinators[device.device_id] = coordinator
 

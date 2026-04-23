@@ -18,5 +18,16 @@
     "abort": {
       "already_configured": "This Anona account is already configured."
     }
+  },
+  "system_health": {
+    "info": {
+      "configured_entries": "Configured entries",
+      "loaded_entries": "Loaded entries",
+      "locks": "Discovered locks",
+      "coordinators": "Active coordinators",
+      "successful_coordinators": "Successful coordinators",
+      "online_locks": "Online locks",
+      "can_reach_server": "Reach Anona API server"
+    }
   }
 }

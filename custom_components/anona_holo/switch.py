@@ -161,7 +161,7 @@ class AnonaNotificationSwitch(  # pyright: ignore[reportIncompatibleVariableOver
         await self.coordinator.async_request_details_refresh()
         refreshed_settings = self.snapshot.switch_settings
         if refreshed_settings is None:
-            message = f"Missing switch settings for {self._device.device_id}"
+            message = "Missing Anona notification switch settings"
             raise HomeAssistantError(message)
         return refreshed_settings
 
