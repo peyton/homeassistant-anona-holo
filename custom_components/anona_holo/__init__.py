@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -16,9 +18,6 @@ from .const import (
     CONF_HOME_ID,
     CONF_PASSWORD,
     CONF_USER_ID,
-    DATA_API,
-    DATA_COORDINATORS,
-    DATA_DEVICES,
     DEVICE_TYPE_LOCK,
     DOMAIN,
 )
@@ -26,8 +25,9 @@ from .coordinator import AnonaDeviceCoordinator
 from .privacy import redact_log_value
 
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+
+    from .api import DeviceContext
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,7 +40,19 @@ PLATFORMS: list[Platform] = [
 ]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+@dataclass(slots=True)
+class AnonaHoloRuntimeData:
+    """Runtime data attached to one Anona Holo config entry."""
+
+    api: AnonaApi
+    devices: dict[str, DeviceContext]
+    coordinators: dict[str, AnonaDeviceCoordinator]
+
+
+type AnonaConfigEntry = ConfigEntry[AnonaHoloRuntimeData]
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: AnonaConfigEntry) -> bool:
     """Set up an Anona Holo config entry."""
     api = AnonaApi(
         async_get_clientsession(hass),
@@ -58,26 +70,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         all_devices = await api.get_all_devices()
     except AnonaAuthError as err:
         raise ConfigEntryAuthFailed(
-            str(
-                redact_log_value(
-                    str(err),
-                    extra_values=(entry.data.get(CONF_EMAIL),),
-                )
-            )
+            translation_domain=DOMAIN,
+            translation_key="invalid_auth",
         ) from err
     except (AnonaApiError, TimeoutError) as err:
         raise ConfigEntryNotReady(
-            str(
-                redact_log_value(
-                    str(err),
-                    extra_values=(
-                        entry.data.get(CONF_EMAIL),
-                        entry.data.get(CONF_HOME_ID),
-                        entry.data.get(CONF_USER_ID),
-                        entry.data.get(CONF_CLIENT_UUID),
-                    ),
-                )
-            )
+            translation_domain=DOMAIN,
+            translation_key="cannot_connect",
         ) from err
 
     updated_data = dict(entry.data)
@@ -95,6 +94,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     try:
         switch_settings_by_device_id = await api.get_device_switch_list_by_home()
+    except AnonaAuthError as err:
+        raise ConfigEntryAuthFailed(
+            translation_domain=DOMAIN,
+            translation_key="invalid_auth",
+        ) from err
     except (AnonaApiError, TimeoutError) as err:
         _LOGGER.debug(
             "Initial getDeviceSwitchListByHomeId preload failed: %s",
@@ -118,23 +122,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await coordinator.async_config_entry_first_refresh()
         except (AnonaApiError, TimeoutError) as err:
             raise ConfigEntryNotReady(
-                "Failed initial Anona lock refresh: "
-                f"{redact_log_value(str(err), extra_values=(device.device_id,))}"
+                translation_domain=DOMAIN,
+                translation_key="cannot_connect",
             ) from err
         coordinators[device.device_id] = coordinator
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-        DATA_API: api,
-        DATA_DEVICES: {device.device_id: device for device in lock_devices},
-        DATA_COORDINATORS: coordinators,
-    }
+    entry.runtime_data = AnonaHoloRuntimeData(
+        api=api,
+        devices={device.device_id: device for device in lock_devices},
+        coordinators=coordinators,
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: AnonaConfigEntry) -> bool:
     """Unload an Anona Holo config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

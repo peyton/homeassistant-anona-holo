@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.components import system_health
 from homeassistant.core import HomeAssistant, callback
 
-from .const import API_BASE_URL, DATA_COORDINATORS, DATA_DEVICES, DOMAIN
+from .const import API_BASE_URL, DOMAIN
 
 if TYPE_CHECKING:
+    from . import AnonaConfigEntry, AnonaHoloRuntimeData
     from .coordinator import AnonaDeviceCoordinator
 
 
@@ -24,14 +25,22 @@ def async_register(
 
 async def system_health_info(hass: HomeAssistant) -> dict[str, Any]:
     """Return integration health details for the system information page."""
-    configured_entries = hass.config_entries.async_entries(DOMAIN)
-    loaded_entry_data = hass.data.get(DOMAIN, {})
+    configured_entries = cast(
+        "list[AnonaConfigEntry]",
+        hass.config_entries.async_entries(DOMAIN),
+    )
+    loaded_entries = [
+        entry
+        for entry in configured_entries
+        if getattr(entry, "runtime_data", None) is not None
+    ]
 
     devices_count = 0
     coordinators: list[AnonaDeviceCoordinator] = []
-    for entry_data in loaded_entry_data.values():
-        devices_count += len(entry_data.get(DATA_DEVICES, {}))
-        coordinators.extend(entry_data.get(DATA_COORDINATORS, {}).values())
+    for entry in loaded_entries:
+        runtime_data = cast("AnonaHoloRuntimeData", entry.runtime_data)
+        devices_count += len(runtime_data.devices)
+        coordinators.extend(runtime_data.coordinators.values())
 
     successful_coordinators = sum(
         1 for coordinator in coordinators if coordinator.last_update_success
@@ -46,7 +55,7 @@ async def system_health_info(hass: HomeAssistant) -> dict[str, Any]:
 
     return {
         "configured_entries": len(configured_entries),
-        "loaded_entries": len(loaded_entry_data),
+        "loaded_entries": len(loaded_entries),
         "locks": devices_count,
         "coordinators": len(coordinators),
         "successful_coordinators": successful_coordinators,

@@ -10,12 +10,9 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 
+from custom_components.anona_holo import AnonaHoloRuntimeData
 from custom_components.anona_holo.api import DeviceContext, LockStatus, OnlineStatus
-from custom_components.anona_holo.const import (
-    DATA_COORDINATORS,
-    DEVICE_TYPE_LOCK,
-    DOMAIN,
-)
+from custom_components.anona_holo.const import DEVICE_TYPE_LOCK
 from custom_components.anona_holo.coordinator import AnonaDeviceSnapshot
 from custom_components.anona_holo.lock import AnonaHoloLock, async_setup_entry
 
@@ -123,15 +120,11 @@ def test_lock_entity_maps_snapshot_and_dispatches_commands() -> None:
 
     assert entity.is_locked is True
     assert entity.available is True
-    assert attrs["battery_level"] == 100
     assert attrs["door_state_code"] == 1
-    assert attrs["auto_lock_enabled"] is True
-    assert attrs["auto_lock_delay_seconds"] == 180
-    assert attrs["auto_lock_delay_label"] == "3 minutes"
-    assert attrs["sound_volume"] == "High"
-    assert attrs["long_endurance_mode_status_code"] == 0
-    assert attrs["raw_data_hex_str"] == "deadbeef"
     assert attrs["device_id"] == "device-123"
+    assert "battery_level" not in attrs
+    assert "raw_data_hex_str" not in attrs
+    assert "auto_lock_enabled" not in attrs
 
     coordinator.api.unlock.assert_awaited_once_with(LOCK_DEVICE)
     coordinator.api.lock.assert_awaited_once_with(LOCK_DEVICE)
@@ -150,19 +143,24 @@ def test_async_setup_entry_only_adds_lock_devices() -> None:
     """Entity setup should filter coordinators to supported lock hardware only."""
     lock_coordinator = _coordinator(device=LOCK_DEVICE)
     other_coordinator = _coordinator(device=OTHER_DEVICE)
-    hass = SimpleNamespace(
-        data={
-            DOMAIN: {
-                "entry-1": {
-                    DATA_COORDINATORS: {
-                        "device-123": lock_coordinator,
-                        "device-999": other_coordinator,
-                    }
-                }
-            }
-        }
+    hass = SimpleNamespace()
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        runtime_data=AnonaHoloRuntimeData(
+            api=cast("Any", object()),
+            devices={
+                "device-123": LOCK_DEVICE,
+                "device-999": OTHER_DEVICE,
+            },
+            coordinators=cast(
+                "Any",
+                {
+                    "device-123": lock_coordinator,
+                    "device-999": other_coordinator,
+                },
+            ),
+        ),
     )
-    entry = SimpleNamespace(entry_id="entry-1")
     added_entities: list[AnonaHoloLock] = []
 
     def add_entities(new_entities: list[AnonaHoloLock]) -> None:

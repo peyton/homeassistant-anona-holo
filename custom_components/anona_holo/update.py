@@ -7,25 +7,26 @@ from typing import TYPE_CHECKING
 from homeassistant.components.update import UpdateDeviceClass, UpdateEntity
 
 from .api import is_firmware_update_available
-from .const import DATA_COORDINATORS, DEVICE_TYPE_LOCK, DOMAIN
+from .const import DEVICE_TYPE_LOCK
 from .entity import AnonaHoloCoordinatorEntity
 
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+    from . import AnonaConfigEntry
     from .coordinator import AnonaDeviceCoordinator
+
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
+    _hass: HomeAssistant,
+    entry: AnonaConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up firmware update entities."""
-    entry_data = hass.data[DOMAIN][entry.entry_id]
-    coordinators: dict[str, AnonaDeviceCoordinator] = entry_data[DATA_COORDINATORS]
+    coordinators: dict[str, AnonaDeviceCoordinator] = entry.runtime_data.coordinators
     entities = [
         AnonaHoloFirmwareUpdate(coordinator)
         for coordinator in coordinators.values()
@@ -47,8 +48,8 @@ class AnonaHoloFirmwareUpdate(  # pyright: ignore[reportIncompatibleVariableOver
         super().__init__(
             coordinator,
             unique_suffix="update_firmware",
-            name="Firmware",
         )
+        self._attr_translation_key = "firmware"
         self._apply_snapshot()
 
     def _handle_coordinator_update(self) -> None:

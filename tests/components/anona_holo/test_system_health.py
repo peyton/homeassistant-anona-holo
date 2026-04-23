@@ -10,15 +10,10 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import Mock
 
+from custom_components.anona_holo import AnonaHoloRuntimeData
 from custom_components.anona_holo import system_health as anona_system_health
 from custom_components.anona_holo.api import DeviceContext, OnlineStatus
-from custom_components.anona_holo.const import (
-    API_BASE_URL,
-    DATA_COORDINATORS,
-    DATA_DEVICES,
-    DEVICE_TYPE_LOCK,
-    DOMAIN,
-)
+from custom_components.anona_holo.const import API_BASE_URL, DEVICE_TYPE_LOCK
 from custom_components.anona_holo.coordinator import AnonaDeviceSnapshot
 
 if TYPE_CHECKING:
@@ -58,16 +53,22 @@ def test_system_health_info_uses_aggregate_redaction_safe_values(
     )
     hass = SimpleNamespace(
         config_entries=SimpleNamespace(
-            async_entries=Mock(return_value=[SimpleNamespace(entry_id="entry-1")])
+            async_entries=Mock(
+                return_value=[
+                    SimpleNamespace(
+                        entry_id="entry-1",
+                        runtime_data=AnonaHoloRuntimeData(
+                            api=cast("Any", object()),
+                            devices={device.device_id: device},
+                            coordinators=cast(
+                                "Any",
+                                {device.device_id: coordinator},
+                            ),
+                        ),
+                    )
+                ]
+            )
         ),
-        data={
-            DOMAIN: {
-                "entry-1": {
-                    DATA_DEVICES: {device.device_id: device},
-                    DATA_COORDINATORS: {device.device_id: coordinator},
-                }
-            }
-        },
     )
     monkeypatch.setattr(
         anona_system_health.system_health,

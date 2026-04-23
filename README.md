@@ -25,6 +25,7 @@ This integration currently supports:
   - event notifications
   - other notifications
   - silent OTA
+- Home Assistant config-entry reauthentication and reconfiguration flows for credential repair/update
 - firmware update entity with installed/latest version, release notes, and release URL
 - config-entry and device diagnostics export with sensitive-field redaction
 - system health reporting with aggregate integration status and Anona API reachability
@@ -115,7 +116,8 @@ gh release view v2026.4.0
 ## Repository Notes
 
 - Runtime code lives in `custom_components/anona_holo`.
-- Fixture-backed tests live in `tests/`.
+- Home Assistant integration tests live in `tests/components/anona_holo/`.
+- Repository helper and release-workflow tests live in `tests/`.
 - CI now includes Home Assistant runtime config-entry lifecycle coverage (setup,
   auth/not-ready mapping, unload cleanup) and entity/service behavior tests for
   the lock platform.

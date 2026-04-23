@@ -8,11 +8,13 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
     AnonaApi,
     AnonaApiError,
+    AnonaAuthError,
     DeviceContext,
     DeviceInfoContext,
     DeviceSwitchSettings,
@@ -101,6 +103,11 @@ class AnonaDeviceCoordinator(DataUpdateCoordinator[AnonaDeviceSnapshot]):
 
         try:
             online_status = await self._api.get_device_online_status(self._device)
+        except AnonaAuthError as err:
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="reauth_required",
+            ) from err
         except (AnonaApiError, TimeoutError) as err:
             _LOGGER.debug(
                 "Fast online poll failed for an Anona lock: %s",
@@ -112,6 +119,11 @@ class AnonaDeviceCoordinator(DataUpdateCoordinator[AnonaDeviceSnapshot]):
 
         try:
             lock_status = await self._api.get_device_status(self._device)
+        except AnonaAuthError as err:
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN,
+                translation_key="reauth_required",
+            ) from err
         except (AnonaApiError, TimeoutError) as err:
             _LOGGER.debug(
                 "Fast lock-status poll failed for an Anona lock: %s",
@@ -138,6 +150,11 @@ class AnonaDeviceCoordinator(DataUpdateCoordinator[AnonaDeviceSnapshot]):
                 device_info_context = await self._api.get_device_info_context(
                     self._device
                 )
+            except AnonaAuthError as err:
+                raise ConfigEntryAuthFailed(
+                    translation_domain=DOMAIN,
+                    translation_key="reauth_required",
+                ) from err
             except (AnonaApiError, TimeoutError) as err:
                 _LOGGER.debug(
                     "Detail poll getDeviceInfo failed for an Anona lock: %s",
@@ -153,6 +170,11 @@ class AnonaDeviceCoordinator(DataUpdateCoordinator[AnonaDeviceSnapshot]):
                 switch_settings = await self._api.get_device_switch_settings(
                     self._device
                 )
+            except AnonaAuthError as err:
+                raise ConfigEntryAuthFailed(
+                    translation_domain=DOMAIN,
+                    translation_key="reauth_required",
+                ) from err
             except (AnonaApiError, TimeoutError) as err:
                 _LOGGER.debug(
                     "Detail poll getDeviceSwitch failed for an Anona lock: %s",
@@ -167,6 +189,11 @@ class AnonaDeviceCoordinator(DataUpdateCoordinator[AnonaDeviceSnapshot]):
                     switches_by_device = (
                         await self._api.get_device_switch_list_by_home()
                     )
+                except AnonaAuthError as err:
+                    raise ConfigEntryAuthFailed(
+                        translation_domain=DOMAIN,
+                        translation_key="reauth_required",
+                    ) from err
                 except (AnonaApiError, TimeoutError) as list_err:
                     _LOGGER.debug(
                         "Detail poll getDeviceSwitchListByHomeId failed: %s",
@@ -187,6 +214,11 @@ class AnonaDeviceCoordinator(DataUpdateCoordinator[AnonaDeviceSnapshot]):
                 firmware_update_context = await self._api.get_firmware_update_context(
                     self._device
                 )
+            except AnonaAuthError as err:
+                raise ConfigEntryAuthFailed(
+                    translation_domain=DOMAIN,
+                    translation_key="reauth_required",
+                ) from err
             except (AnonaApiError, TimeoutError) as err:
                 _LOGGER.debug(
                     "Detail poll checkNewRomFromApp failed for an Anona lock: %s",

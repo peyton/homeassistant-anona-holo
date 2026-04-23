@@ -48,7 +48,7 @@ from custom_components.anona_holo.const import (
 if TYPE_CHECKING:
     import pytest
 
-FIXTURE_PATH = Path(__file__).parent / "fixtures" / "anona_capture.json"
+FIXTURE_PATH = Path(__file__).parents[2] / "fixtures" / "anona_capture.json"
 FIXTURE = json.loads(FIXTURE_PATH.read_text())
 
 

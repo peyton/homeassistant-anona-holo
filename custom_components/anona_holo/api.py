@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
-from aiohttp import WSMsgType
+from aiohttp import ClientError, WSMsgType
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.padding import PKCS7
 
@@ -90,6 +90,10 @@ class AnonaApiError(Exception):
 
 class AnonaAuthError(AnonaApiError):
     """Raised when authentication fails."""
+
+
+class AnonaConnectionError(AnonaApiError):
+    """Raised when the Anona API cannot be reached."""
 
 
 class AnonaSignatureError(AnonaApiError):
@@ -792,33 +796,37 @@ class AnonaApi:
             "websocket aes key",
         )
 
-        async with self._session.ws_connect(websocket_context.address) as websocket:
-            await self._send_websocket_handshake(websocket, handshake_token)
-            operation = build_websocket_operation()
-            command_content = build_command_content(send_id, self._user_id)
-            encrypted_payload = encrypt_websocket_payload(
-                build_websocket_command_payload(
-                    device=device_context,
-                    content=command_content,
-                    operate_id=operation["operateId"],
-                    ts=_require_int(operation["ts"], "websocket command ts"),
-                    target=WEBSOCKET_COMMAND_TARGET,
-                ),
-                websocket_aes_key,
-            )
-            await websocket.send_str(encrypted_payload)
-            _LOGGER.debug(
-                "Sent Anona websocket command %s and waiting for acknowledgement",
-                send_id,
-            )
-            await self._await_websocket_command_result(
-                websocket,
-                websocket_aes_key=websocket_aes_key,
-                operate_id=_require_string(
-                    operation["operateId"], "websocket command operateId"
-                ),
-                device_id=device_context.device_id,
-            )
+        try:
+            async with self._session.ws_connect(websocket_context.address) as websocket:
+                await self._send_websocket_handshake(websocket, handshake_token)
+                operation = build_websocket_operation()
+                command_content = build_command_content(send_id, self._user_id)
+                encrypted_payload = encrypt_websocket_payload(
+                    build_websocket_command_payload(
+                        device=device_context,
+                        content=command_content,
+                        operate_id=operation["operateId"],
+                        ts=_require_int(operation["ts"], "websocket command ts"),
+                        target=WEBSOCKET_COMMAND_TARGET,
+                    ),
+                    websocket_aes_key,
+                )
+                await websocket.send_str(encrypted_payload)
+                _LOGGER.debug(
+                    "Sent Anona websocket command %s and waiting for acknowledgement",
+                    send_id,
+                )
+                await self._await_websocket_command_result(
+                    websocket,
+                    websocket_aes_key=websocket_aes_key,
+                    operate_id=_require_string(
+                        operation["operateId"], "websocket command operateId"
+                    ),
+                    device_id=device_context.device_id,
+                )
+        except ClientError as err:
+            message = "Cannot connect to the Anona websocket service"
+            raise AnonaCommandError(message) from err
 
     async def _send_websocket_handshake(
         self,
@@ -970,14 +978,18 @@ class AnonaApi:
         if payload is not None:
             request_kwargs["json"] = payload
 
-        async with self._session.post(
-            f"{self._base_url}{endpoint}",
-            **request_kwargs,
-        ) as response:
-            if response.status != HTTP_STATUS_OK:
-                message = f"HTTP {response.status} from {endpoint}"
-                raise AnonaApiError(message)
-            body_text = await response.text()
+        try:
+            async with self._session.post(
+                f"{self._base_url}{endpoint}",
+                **request_kwargs,
+            ) as response:
+                if response.status != HTTP_STATUS_OK:
+                    message = f"HTTP {response.status} from {endpoint}"
+                    raise AnonaApiError(message)
+                body_text = await response.text()
+        except (ClientError, TimeoutError) as err:
+            message = "Cannot connect to the Anona API"
+            raise AnonaConnectionError(message) from err
 
         envelope = decode_response_envelope(body_text)
         error_code = _coerce_int(envelope.get("errorCode")) or 0
