@@ -10,6 +10,8 @@ from .api import is_firmware_update_available
 from .const import DEVICE_TYPE_LOCK
 from .entity import AnonaHoloCoordinatorEntity
 
+FIRMWARE_TRANSLATION_KEY = "firmware"
+
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -49,7 +51,7 @@ class AnonaHoloFirmwareUpdate(  # pyright: ignore[reportIncompatibleVariableOver
             coordinator,
             unique_suffix="update_firmware",
         )
-        self._attr_translation_key = "firmware"
+        self._attr_translation_key = FIRMWARE_TRANSLATION_KEY
         self._apply_snapshot()
 
     def _handle_coordinator_update(self) -> None:

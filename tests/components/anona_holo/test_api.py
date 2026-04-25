@@ -511,7 +511,7 @@ def test_parse_lock_status_decodes_the_captured_hex_payload() -> None:
     assert status.door_state_code == 1
     assert status.door_status_code == 1
     assert status.sound_volume_code == 2
-    assert status.sound_volume == "High"
+    assert status.sound_volume == "high"
     assert status.low_power_mode_enabled is False
     assert status.long_endurance_mode_status_code == 0
     assert status.raw_fields["3"] == {"1": {"1": 100}}
@@ -529,7 +529,7 @@ def test_parse_lock_status_decodes_live_5_second_auto_lock_payload() -> None:
     assert status.auto_lock_delay_seconds == 5
     assert status.auto_lock_delay_label == "5 seconds"
     assert status.sound_volume_code == 2
-    assert status.sound_volume == "High"
+    assert status.sound_volume == "high"
     assert status.low_power_mode_enabled is False
     assert status.raw_fields["11"] == {"1": 1, "2": 5}
 

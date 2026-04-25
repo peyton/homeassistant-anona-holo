@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 
+import pytest
+from homeassistant.exceptions import HomeAssistantError
+
 from custom_components.anona_holo.api import (
     DeviceContext,
     DeviceInfoContext,
@@ -24,6 +27,7 @@ from custom_components.anona_holo.binary_sensor import (
 from custom_components.anona_holo.binary_sensor import (
     PARALLEL_UPDATES as BINARY_SENSOR_PARALLEL_UPDATES,
 )
+from custom_components.anona_holo.const import DOMAIN
 from custom_components.anona_holo.coordinator import AnonaDeviceSnapshot
 from custom_components.anona_holo.sensor import (
     PARALLEL_UPDATES as SENSOR_PARALLEL_UPDATES,
@@ -41,10 +45,11 @@ from custom_components.anona_holo.switch import (
     PARALLEL_UPDATES as SWITCH_PARALLEL_UPDATES,
 )
 from custom_components.anona_holo.update import (
-    PARALLEL_UPDATES as UPDATE_PARALLEL_UPDATES,
+    FIRMWARE_TRANSLATION_KEY,
+    AnonaHoloFirmwareUpdate,
 )
 from custom_components.anona_holo.update import (
-    AnonaHoloFirmwareUpdate,
+    PARALLEL_UPDATES as UPDATE_PARALLEL_UPDATES,
 )
 
 LOCK_DEVICE = DeviceContext(
@@ -86,7 +91,7 @@ LOCK_STATUS = LockStatus(
     auto_lock_delay_seconds=180,
     auto_lock_delay_label="3 minutes",
     sound_volume_code=2,
-    sound_volume="High",
+    sound_volume="high",
     low_power_mode_enabled=True,
 )
 DEVICE_INFO = DeviceInfoContext(
@@ -218,13 +223,18 @@ def test_sensor_and_binary_sensor_state_mapping() -> None:
 
     assert battery_sensor.native_value == 95
     assert auto_lock_delay_sensor.native_value == 180
-    assert sound_volume_sensor.native_value == "High"
+    assert sound_volume_sensor.native_value == "high"
     assert keypad_sensor.native_value == 80
     assert auto_lock_sensor.is_on is True
     assert jam_sensor.is_on is False
     assert low_power_sensor.is_on is True
     assert battery_sensor.translation_key == "battery_level"
+    assert auto_lock_delay_sensor.translation_key == "auto_lock_delay"
+    assert sound_volume_sensor.translation_key == "sound_volume"
+    assert keypad_sensor.translation_key == "keypad_battery"
     assert auto_lock_sensor.translation_key == "auto_lock_enabled"
+    assert jam_sensor.translation_key == "lock_jam"
+    assert low_power_sensor.translation_key == "low_power_mode"
     assert battery_sensor.entity_description.translation_key == "battery_level"
     assert auto_lock_sensor.entity_description.translation_key == "auto_lock_enabled"
 
@@ -241,6 +251,7 @@ def test_notification_switch_merges_payload_for_update_device_switch() -> None:
 
         await entity.async_turn_on()
 
+        assert entity.translation_key == "event_notifications"
         coordinator.api.update_device_switch_settings.assert_awaited_once_with(
             LOCK_DEVICE,
             main_switch=True,
@@ -249,6 +260,35 @@ def test_notification_switch_merges_payload_for_update_device_switch() -> None:
             normal_notify_switch=True,
         )
         coordinator.async_request_details_refresh.assert_awaited_once()
+
+    asyncio.run(_run())
+
+
+def test_notification_switch_missing_settings_raises_translatable_error() -> None:
+    """Missing switch settings should raise a translated Home Assistant error."""
+
+    async def _run() -> None:
+        coordinator = _coordinator()
+        coordinator.data = AnonaDeviceSnapshot(
+            device=LOCK_DEVICE,
+            online_status=ONLINE_STATUS,
+            lock_status=LOCK_STATUS,
+            device_info_context=DEVICE_INFO,
+            switch_settings=None,
+            firmware_update_context=FIRMWARE_CONTEXT,
+        )
+        description = next(
+            item for item in NOTIFICATION_SWITCHES if item.key == "event_notifications"
+        )
+        entity = AnonaNotificationSwitch(cast("Any", coordinator), description)
+
+        with pytest.raises(HomeAssistantError) as err:
+            await entity.async_turn_on()
+
+        assert err.value.translation_domain == DOMAIN
+        assert err.value.translation_key == "missing_switch_settings"
+        coordinator.async_request_details_refresh.assert_awaited_once()
+        coordinator.api.update_device_switch_settings.assert_not_awaited()
 
     asyncio.run(_run())
 
@@ -262,6 +302,7 @@ def test_silent_ota_switch_writes_current_window() -> None:
 
         await entity.async_turn_off()
 
+        assert entity.translation_key == "silent_ota"
         coordinator.api.set_silent_ota.assert_awaited_once_with(
             LOCK_DEVICE,
             enabled=False,
@@ -282,7 +323,7 @@ def test_update_entity_exposes_firmware_metadata() -> None:
     assert entity.release_summary == "notes"
     assert entity.release_url == "https://example.com/fw.bin"
     assert entity.available is True
-    assert entity.translation_key == "firmware"
+    assert entity.translation_key == FIRMWARE_TRANSLATION_KEY
 
 
 def test_platform_parallel_updates_are_explicit() -> None:
