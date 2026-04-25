@@ -10,5 +10,5 @@
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/peyton/homeassistant-anona-holo/issues",
-  "version": "2026.4.2"
+  "version": "2026.4.3"
 }
