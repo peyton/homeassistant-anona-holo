@@ -166,7 +166,7 @@ def _build_fake_api(
             auto_lock_delay_seconds=180,
             auto_lock_delay_label="3 minutes",
             sound_volume_code=2,
-            sound_volume="High",
+            sound_volume="high",
             low_power_mode_enabled=False,
         )
     )

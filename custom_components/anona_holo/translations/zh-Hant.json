@@ -1,0 +1,140 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "此 Anona 帳戶已設定。",
+      "reauth_successful": "重新驗證成功。",
+      "reconfigure_successful": "重新設定成功。",
+      "wrong_account": "驗證的帳戶與已設定的 Anona Holo 帳戶不相符。"
+    },
+    "error": {
+      "cannot_connect": "無法連線到 Anona Security 服務。",
+      "invalid_auth": "電子郵件或密碼無效。",
+      "unknown": "發生未預期的錯誤。請查看記錄以了解詳細資訊。"
+    },
+    "step": {
+      "user": {
+        "title": "Anona Holo",
+        "description": "使用你的 Anona Security 應用程式帳戶登入。",
+        "data": {
+          "email": "電子郵件",
+          "password": "密碼"
+        }
+      },
+      "reauth_confirm": {
+        "title": "重新驗證 Anona Holo",
+        "description": "為 {email} 再次使用你的 Anona Security 應用程式帳戶登入。",
+        "data": {
+          "email": "電子郵件",
+          "password": "密碼"
+        }
+      },
+      "reconfigure": {
+        "title": "重新設定 Anona Holo",
+        "description": "更新 {email} 已儲存的 Anona Security 應用程式帳戶憑證。",
+        "data": {
+          "email": "電子郵件",
+          "password": "密碼"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "auto_lock_enabled": {
+        "name": "自動上鎖"
+      },
+      "door_open_too_long": {
+        "name": "門開啟時間過長"
+      },
+      "keypad_connected": {
+        "name": "鍵盤已連線"
+      },
+      "lock_jam": {
+        "name": "門鎖卡住"
+      },
+      "low_power_mode": {
+        "name": "低電量模式"
+      },
+      "online": {
+        "name": "在線"
+      }
+    },
+    "sensor": {
+      "auto_lock_delay": {
+        "name": "自動上鎖延遲"
+      },
+      "battery_level": {
+        "name": "電池"
+      },
+      "keypad_battery": {
+        "name": "鍵盤電池"
+      },
+      "last_alive": {
+        "name": "上次在線"
+      },
+      "sound_volume": {
+        "name": "聲音提示等級",
+        "state": {
+          "high": "高",
+          "low": "低"
+        }
+      }
+    },
+    "switch": {
+      "abnormal_notifications": {
+        "name": "異常通知"
+      },
+      "allow_notifications": {
+        "name": "允許通知"
+      },
+      "event_notifications": {
+        "name": "事件通知"
+      },
+      "other_notifications": {
+        "name": "其他通知"
+      },
+      "silent_ota": {
+        "name": "靜默韌體更新"
+      }
+    },
+    "update": {
+      "firmware": {
+        "name": "韌體"
+      }
+    }
+  },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "無法連線到 Anona Security 服務。"
+    },
+    "invalid_auth": {
+      "message": "電子郵件或密碼無效。"
+    },
+    "lock_command_failed": {
+      "message": "門鎖命令失敗。"
+    },
+    "missing_switch_settings": {
+      "message": "通知開關設定尚不可用。請在 Home Assistant 重新整理門鎖後重試。"
+    },
+    "reauth_required": {
+      "message": "驗證已過期。請重新設定已儲存的憑證。"
+    },
+    "silent_ota_update_failed": {
+      "message": "更新靜默韌體更新設定失敗。"
+    },
+    "update_switch_failed": {
+      "message": "更新通知設定失敗。"
+    }
+  },
+  "system_health": {
+    "info": {
+      "can_reach_server": "可連線到 Anona API 伺服器",
+      "configured_entries": "已設定條目",
+      "coordinators": "作用中協調器",
+      "loaded_entries": "已載入條目",
+      "locks": "已發現的門鎖",
+      "online_locks": "在線門鎖",
+      "successful_coordinators": "成功的協調器"
+    }
+  }
+}

@@ -137,6 +137,7 @@ class AnonaHoloBinarySensor(  # pyright: ignore[reportIncompatibleVariableOverri
         super().__init__(
             coordinator,
             unique_suffix=f"binary_sensor_{description.key}",
+            translation_key=description.translation_key,
         )
         self._description = description
         self.entity_description = description

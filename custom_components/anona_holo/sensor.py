@@ -65,7 +65,7 @@ SENSOR_DESCRIPTIONS: tuple[AnonaSensorDescription, ...] = (
         translation_key="sound_volume",
         device_class=SensorDeviceClass.ENUM,
         entity_category=EntityCategory.CONFIG,
-        options=["High", "Low"],
+        options=["high", "low"],
         has_entity_name=True,
         value_fn=lambda snapshot: (
             snapshot.lock_status.sound_volume if snapshot.lock_status else None
@@ -136,6 +136,7 @@ class AnonaHoloSensor(  # pyright: ignore[reportIncompatibleVariableOverride]
         super().__init__(
             coordinator,
             unique_suffix=f"sensor_{description.key}",
+            translation_key=description.translation_key,
         )
         self._description = description
         self.entity_description = description

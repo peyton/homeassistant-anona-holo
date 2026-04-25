@@ -79,8 +79,8 @@ AUTO_LOCK_DELAY_LABELS: dict[int, str] = {
     180: "3 minutes",
 }
 SOUND_VOLUME_LABELS: dict[int, str] = {
-    1: "Low",
-    2: "High",
+    1: "low",
+    2: "high",
 }
 
 type DecodedProtoValue = int | dict[str, DecodedProtoValue] | list[DecodedProtoValue]
@@ -1532,7 +1532,7 @@ def describe_auto_lock_delay(value: int | None) -> str | None:
 
 
 def describe_sound_volume(code: int | None) -> str | None:
-    """Return a human-readable sound volume label for a raw enum code."""
+    """Return the normalized sound alert level state for a raw enum code."""
     if code is None:
         return None
     return SOUND_VOLUME_LABELS.get(code)

@@ -1,38 +1,38 @@
 {
   "config": {
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_account%]",
-      "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]",
-      "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]",
+      "already_configured": "This Anona account is already configured.",
+      "reauth_successful": "Reauthentication was successful.",
+      "reconfigure_successful": "Reconfiguration was successful.",
       "wrong_account": "The authenticated account does not match the configured Anona Holo account."
     },
     "error": {
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-      "unknown": "[%key:common::config_flow::error::unknown%]"
+      "cannot_connect": "Unable to connect to the Anona Security service.",
+      "invalid_auth": "Invalid email or password.",
+      "unknown": "Unexpected error. Check logs for details."
     },
     "step": {
       "user": {
         "title": "Anona Holo",
-        "description": "Enter your Anona Holo app credentials.",
+        "description": "Sign in with your Anona Security app account.",
         "data": {
-          "email": "Email address",
+          "email": "Email",
           "password": "Password"
         }
       },
       "reauth_confirm": {
-        "title": "[%key:common::config_flow::title::reauth%]",
-        "description": "Re-enter the credentials for {email}.",
+        "title": "Reauthenticate Anona Holo",
+        "description": "Sign in again with your Anona Security app account for {email}.",
         "data": {
-          "email": "Email address",
+          "email": "Email",
           "password": "Password"
         }
       },
       "reconfigure": {
         "title": "Reconfigure Anona Holo",
-        "description": "Update the saved credentials for {email}.",
+        "description": "Update the saved Anona Security app account credentials for {email}.",
         "data": {
-          "email": "Email address",
+          "email": "Email",
           "password": "Password"
         }
       }
@@ -70,10 +70,14 @@
         "name": "Keypad battery"
       },
       "last_alive": {
-        "name": "Last alive"
+        "name": "Last seen"
       },
       "sound_volume": {
-        "name": "Sound volume"
+        "name": "Sound alert level",
+        "state": {
+          "high": "High",
+          "low": "Low"
+        }
       }
     },
     "switch": {
@@ -90,7 +94,7 @@
         "name": "Other notifications"
       },
       "silent_ota": {
-        "name": "Silent OTA"
+        "name": "Silent firmware updates"
       }
     },
     "update": {
@@ -101,22 +105,22 @@
   },
   "exceptions": {
     "cannot_connect": {
-      "message": "Cannot connect to the Anona Holo service."
+      "message": "Unable to connect to the Anona Security service."
     },
     "invalid_auth": {
-      "message": "Authentication failed."
+      "message": "Invalid email or password."
     },
     "lock_command_failed": {
       "message": "The lock command failed."
     },
     "missing_switch_settings": {
-      "message": "Notification settings are not available yet."
+      "message": "Notification switch settings are not available yet. Try again after Home Assistant refreshes the lock."
     },
     "reauth_required": {
       "message": "Authentication expired. Reconfigure the saved credentials."
     },
     "silent_ota_update_failed": {
-      "message": "Updating the Silent OTA setting failed."
+      "message": "Updating the silent firmware updates setting failed."
     },
     "update_switch_failed": {
       "message": "Updating the notification setting failed."
@@ -124,13 +128,13 @@
   },
   "system_health": {
     "info": {
+      "can_reach_server": "Can reach Anona API server",
       "configured_entries": "Configured entries",
+      "coordinators": "Active coordinators",
       "loaded_entries": "Loaded entries",
       "locks": "Discovered locks",
-      "coordinators": "Active coordinators",
-      "successful_coordinators": "Successful coordinators",
       "online_locks": "Online locks",
-      "can_reach_server": "Reach Anona API server"
+      "successful_coordinators": "Successful coordinators"
     }
   }
 }

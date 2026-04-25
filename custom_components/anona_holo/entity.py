@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.typing import UNDEFINED, UndefinedType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
@@ -19,13 +20,17 @@ class AnonaHoloCoordinatorEntity(CoordinatorEntity[AnonaDeviceCoordinator]):
         coordinator: AnonaDeviceCoordinator,
         *,
         unique_suffix: str,
-        name: str | None = None,
+        name: str | None | UndefinedType = UNDEFINED,
+        translation_key: str | None = None,
     ) -> None:
         """Initialize a shared coordinator-backed entity."""
         super().__init__(coordinator)
         self._device = coordinator.device
         self._api = coordinator.api
-        self._attr_name = name
+        if name is not UNDEFINED:
+            self._attr_name = name
+        if translation_key is not None:
+            self._attr_translation_key = translation_key
         self._attr_unique_id = f"{DOMAIN}_{self._device.device_id}_{unique_suffix}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._device.device_id)},

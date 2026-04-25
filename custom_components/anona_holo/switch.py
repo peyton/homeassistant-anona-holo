@@ -114,6 +114,7 @@ class AnonaNotificationSwitch(  # pyright: ignore[reportIncompatibleVariableOver
         super().__init__(
             coordinator,
             unique_suffix=f"switch_{description.key}",
+            translation_key=description.translation_key,
         )
         self._description = description
         self.entity_description = description
@@ -197,6 +198,7 @@ class AnonaSilentOTASwitch(  # pyright: ignore[reportIncompatibleVariableOverrid
         super().__init__(
             coordinator,
             unique_suffix="switch_silent_ota",
+            translation_key=SILENT_OTA_SWITCH.translation_key,
         )
         self.entity_description = SILENT_OTA_SWITCH
         self._apply_snapshot()
