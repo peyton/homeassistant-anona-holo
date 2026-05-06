@@ -2,7 +2,7 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 bootstrap:
     uv venv --allow-existing .venv
-    uv pip install --python .venv/bin/python -r requirements.txt
+    uv pip install --prerelease=allow --python .venv/bin/python -r requirements.txt
     hk install --mise
 
 lint:
