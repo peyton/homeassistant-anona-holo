@@ -28,6 +28,8 @@ The repository has three open Renovate pull requests that each update one member
   Evidence: `mise.toml` pinned `uv==0.11.8`, `hk==1.44.3`, `ruff==0.15.12`, `act==0.2.88`, `ghalint==1.5.6`, and `gh==2.92.0`, while `mise.lock` still contained the previous versions. Running `mise lock` pruned six stale version entries.
 - Observation: updating PR #25 after #47 merged caused a direct conflict in `requirements.txt`.
   Evidence: the PR branch wanted `pytest==9.0.3` with helper `0.13.324`, while master had already moved the helper to `0.13.325` and removed the direct Home Assistant pin.
+- Observation: Renovate force-updated PR #25 after #47 merged, so the first push was rejected.
+  Evidence: `git push` reported `fetch first`, and `git fetch` showed a forced update from `1c71002` to `9796b65` on `origin/renovate/pypi-pytest-vulnerability`.
 
 ## Decision Log
 
@@ -45,6 +47,7 @@ Work is in progress.
 - 2026-05-06T22:17Z: PR #47 passed local `mise install --locked`, `mise bootstrap`, and `just check`; pytest reported 69 passed.
 - 2026-05-06T22:18Z: PR #25 conflict was resolved by keeping the helper-managed stack and adding `tests/test_dependency_policy.py`.
 - 2026-05-06T22:22Z: PR #25 passed local `just check`; pytest reported 70 passed.
+- 2026-05-06T22:24Z: After integrating Renovate's forced branch update, PR #25 passed `mise install --locked`, `mise bootstrap`, and `just check` again; pytest reported 70 passed.
 
 ## Context and Orientation
 
@@ -85,6 +88,11 @@ Observed local validation for PR #25:
     0 errors, 0 warnings, 0 informations
     70 passed in 0.79s
 
+Observed local validation for PR #25 after the Renovate branch refresh:
+
+    0 errors, 0 warnings, 0 informations
+    70 passed in 0.70s
+
 ## Validation and Acceptance
 
 Each updated pull request must pass `Quality checks`, `Hassfest validation`, `HACS validation`, and CodeQL. The local command `just check` should pass before pushing each branch. After merging, master should have successful CI and Validate workflow runs. The release is accepted when `gh release view v<version>` succeeds and the tag points at the intended release commit.
@@ -112,3 +120,5 @@ Revision note: Recorded PR #47 dependency, lockfile, and local validation work.
 Revision note: Recorded PR #25 conflict resolution and dependency policy test.
 
 Revision note: Recorded PR #25 local validation after replacing bare asserts with explicit pytest failures.
+
+Revision note: Recorded PR #25 remote branch refresh and second validation.
