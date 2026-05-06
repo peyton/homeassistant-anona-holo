@@ -1,7 +1,7 @@
 aiohasupervisor==0.4.3
 colorlog==6.10.1
 pip>=21.3.1
-pytest==9.0.0
+pytest==9.0.3
 # pytest-homeassistant-custom-component pins the matching Home Assistant Core
 # test stack, including the exact homeassistant package version.
 pytest-homeassistant-custom-component==0.13.325
