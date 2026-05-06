@@ -34,6 +34,8 @@ The repository has three open Renovate pull requests that each update one member
   Evidence: `requirements.txt` on the refreshed branch still included `pytest==9.0.0`, so merging master produced a conflict between helper `0.13.326` and the helper-only policy from #25.
 - Observation: helper `0.13.326` requires a Home Assistant prerelease, and uv will not resolve that transitive prerelease unless prereleases are explicitly allowed.
   Evidence: `uv pip install` failed with `there is no version of homeassistant==2026.5.0b0` and suggested `--prerelease=allow`.
+- Observation: Renovate refreshed PR #50 again after #25 merged, causing the first #50 push to be rejected.
+  Evidence: `git fetch` showed a forced update from `57992bd` to `86ff620` on `origin/renovate/pytest-homeassistant-custom-component-0.x`.
 
 ## Decision Log
 
@@ -58,6 +60,7 @@ Work is in progress.
 - 2026-05-06T22:25Z: PR #50 conflict was resolved by keeping helper `0.13.326` and the helper-managed pytest policy.
 - 2026-05-06T22:27Z: PR #50 bootstrap failed until `just bootstrap` was updated to pass `uv pip install --prerelease=allow`; README setup notes were updated with that behavior.
 - 2026-05-06T22:32Z: PR #50 passed local `mise install --locked`, `mise bootstrap`, and `just check`; pytest reported 70 passed.
+- 2026-05-06T22:33Z: Integrated Renovate's second #50 branch refresh and kept the prerelease bootstrap fix.
 
 ## Context and Orientation
 
@@ -143,3 +146,5 @@ Revision note: Recorded PR #50 conflict resolution against current master.
 Revision note: Recorded the uv prerelease resolver failure and the bootstrap/README update.
 
 Revision note: Recorded PR #50 local validation.
+
+Revision note: Recorded PR #50 second remote branch refresh before push.
