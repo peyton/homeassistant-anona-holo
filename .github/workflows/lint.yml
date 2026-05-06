@@ -35,6 +35,7 @@ jobs:
         with:
           version: 2026.4.1
           install: true
+          install_args: "--locked"
           cache: true
 
       - name: Bootstrap the repository
