@@ -78,7 +78,7 @@ just typecheck
 just test
 ```
 
-`mise bootstrap` installs the pinned CLI tools, creates `.venv`, installs the Python dependencies, and refreshes the `hk` git hooks. The `justfile` is the canonical manual command surface after bootstrap.
+`mise bootstrap` installs the pinned CLI tools, creates `.venv`, installs the Python dependencies, and refreshes the `hk` git hooks. The Home Assistant test stack is pinned by `pytest-homeassistant-custom-component`, which may temporarily follow Home Assistant beta builds, so bootstrap allows prerelease dependency resolution. The `justfile` is the canonical manual command surface after bootstrap.
 
 For local Home Assistant development, run `just develop`. It will create an ignored `config/` directory with a default `configuration.yaml` on first run and preserve any existing local changes under that directory.
 
