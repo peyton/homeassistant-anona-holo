@@ -315,42 +315,49 @@ url = "https://github.com/astral-sh/python-build-standalone/releases/download/20
 provenance = "github-attestations"
 
 [[tools.ruff]]
-version = "0.15.12"
+version = "0.16.6"
 backend = "aqua:astral-sh/ruff"
 
 [tools.ruff."platforms.linux-arm64"]
-checksum = "sha256:8996fe01814d00480c81da2b8ce9e8274f63eb07992318f082f7071772699635"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.12/ruff-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:3c1b99f65b8bf2df64ff099ee072e11b4652813e2c164ec875a26fc9e99be88f"
+url = "https://github.com/astral-sh/ruff/releases/download/0.16.6/ruff-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/543094369"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.linux-arm64-musl"]
-checksum = "sha256:8996fe01814d00480c81da2b8ce9e8274f63eb07992318f082f7071772699635"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.12/ruff-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:9b28fc0646a7379c5a25f68b559669c39bc000325bbad5b64b47fcf6a3b582ae"
+url = "https://github.com/astral-sh/ruff/releases/download/0.16.6/ruff-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/543094376"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.linux-x64"]
-checksum = "sha256:e0b074f722f87efe2e09de3a77820a012d1417ebabbd308cccdf6b98ba8d4bb3"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.12/ruff-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:0696335ef16615d8c7445ad438750eb0f55b3da6f153df21265a7c6d5750254f"
+url = "https://github.com/astral-sh/ruff/releases/download/0.16.6/ruff-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/543094461"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.linux-x64-musl"]
-checksum = "sha256:e0b074f722f87efe2e09de3a77820a012d1417ebabbd308cccdf6b98ba8d4bb3"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.12/ruff-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:63740c5a1576dea4e1f2ff3f7427031188d23a11b7a4f78560749b8732a3b724"
+url = "https://github.com/astral-sh/ruff/releases/download/0.16.6/ruff-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/543094475"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.macos-arm64"]
-checksum = "sha256:bd59107e125f9c9f64a75be13b6ff21bf7cbc61c4b9529bbb75c8184e3dd6c3c"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.12/ruff-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:77513748c833b435b82453ba20e07db808ef6c5121945ede80a6cf21bee468a4"
+url = "https://github.com/astral-sh/ruff/releases/download/0.16.6/ruff-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/543094359"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.macos-x64"]
-checksum = "sha256:f88b6ad8338ad7acf83497e4bc2f2b5d3cac46c3e71363b7263c1bb9027c9b37"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.12/ruff-x86_64-apple-darwin.tar.gz"
+checksum = "sha256:87cce7e591603efa979be9044ac00835638a5d9052947070b6e2e7c0cdb21940"
+url = "https://github.com/astral-sh/ruff/releases/download/0.16.6/ruff-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/543094450"
 provenance = "github-attestations"
 
 [tools.ruff."platforms.windows-x64"]
-checksum = "sha256:d378033392042377491ef2541457af47cc4652c4e984639c95413b0c4876b0f1"
-url = "https://github.com/astral-sh/ruff/releases/download/0.15.12/ruff-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:d968cbf82bcb42042a59e9478a48f9a00db88cceaa2eeaa86c4834c02a70eaf6"
+url = "https://github.com/astral-sh/ruff/releases/download/0.16.6/ruff-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/ruff/releases/assets/543094453"
 provenance = "github-attestations"
 
 [[tools.uv]]
